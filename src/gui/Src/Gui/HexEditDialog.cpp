@@ -13,7 +13,9 @@
 #ifndef AF_INET6
 #define AF_INET6        23              // Internetwork Version 6
 #endif //AF_INET6
+#ifdef _WIN32
 typedef PCTSTR(__stdcall* INETNTOPW)(INT Family, PVOID pAddr, wchar_t* pStringBuf, size_t StringBufSize);
+#endif // _WIN32
 
 HexEditDialog::HexEditDialog(QWidget* parent) : QDialog(parent), ui(new Ui::HexEditDialog)
 {
@@ -401,15 +403,15 @@ static QString printEscapedString(bool & bPrevWasHex, int ch, const char* hexFor
         if(ch >= ' ' && ch <= '~')
         {
             if(bPrevWasHex && isxdigit(ch))
-                data = QString().sprintf("\"\"%c", ch);
+                data = QString::asprintf("\"\"%c", ch);
             else
-                data = QString().sprintf("%c", ch);
+                data = QString::asprintf("%c", ch);
             bPrevWasHex = false;
         }
         else
         {
             bPrevWasHex = true;
-            data = QString().sprintf(hexFormat, ch);
+            data = QString::asprintf(hexFormat, ch);
         }
         break;
     }
@@ -462,7 +464,7 @@ void HexEditDialog::printData(DataType type)
     {
         data = "{\n" + formatLoop<unsigned char>(mData, mTypes[mIndex], [](unsigned char n)
         {
-            return QString().sprintf("0x%02X", n);
+            return QString::asprintf("0x%02X", n);
         }) + "\n};";
     }
     break;
@@ -471,7 +473,7 @@ void HexEditDialog::printData(DataType type)
     {
         data = "{\n" + formatLoop<unsigned short>(mData, mTypes[mIndex], [](unsigned short n)
         {
-            return QString().sprintf("0x%04X", n);
+            return QString::asprintf("0x%04X", n);
         }) + "\n};";
     }
     break;
@@ -480,7 +482,7 @@ void HexEditDialog::printData(DataType type)
     {
         data = "{\n" + formatLoop<unsigned int>(mData, mTypes[mIndex], [](unsigned int n)
         {
-            return QString().sprintf("0x%08X", n);
+            return QString::asprintf("0x%08X", n);
         }) + "\n};";
     }
     break;
@@ -489,7 +491,7 @@ void HexEditDialog::printData(DataType type)
     {
         data = "{\n" + formatLoop<unsigned long long>(mData, mTypes[mIndex], [](unsigned long long n)
         {
-            return QString().sprintf("0x%016llX", n);
+            return QString::asprintf("0x%016llX", n);
         }) + "\n};";
     }
     break;
@@ -522,7 +524,7 @@ void HexEditDialog::printData(DataType type)
             else //full unicode character
             {
                 bPrevWasHex = true;
-                data += QString().sprintf("\\x%04X", ch);
+                data += QString::asprintf("\\x%04X", ch);
             }
         }
         data += "\"";
@@ -535,7 +537,7 @@ void HexEditDialog::printData(DataType type)
         for(int i = 0; i < mData.size(); i++)
         {
             byte_t ch = mData.at(i);
-            data += QString().sprintf("\\x%02X", ch);
+            data += QString::asprintf("\\x%02X", ch);
         }
         data += "\"";
     }
@@ -569,7 +571,7 @@ void HexEditDialog::printData(DataType type)
     {
         data = "array DB " + formatLoop<unsigned char>(mData, mTypes[mIndex], [](unsigned char n)
         {
-            QString value = QString().sprintf("%02Xh", n);
+            QString value = QString::asprintf("%02Xh", n);
             if(value.at(0).isLetter())
                 value.insert(0, '0');
 
@@ -582,7 +584,7 @@ void HexEditDialog::printData(DataType type)
     {
         data = "array DW " + formatLoop<unsigned short>(mData, mTypes[mIndex], [](unsigned short n)
         {
-            QString value = QString().sprintf("%04Xh", n);
+            QString value = QString::asprintf("%04Xh", n);
             if(value.at(0).isLetter())
                 value.insert(0, '0');
 
@@ -595,7 +597,7 @@ void HexEditDialog::printData(DataType type)
     {
         data = "array DD " + formatLoop<unsigned int>(mData, mTypes[mIndex], [](unsigned int n)
         {
-            QString value = QString().sprintf("%08Xh", n);
+            QString value = QString::asprintf("%08Xh", n);
             if(value.at(0).isLetter())
                 value.insert(0, '0');
 
@@ -608,7 +610,7 @@ void HexEditDialog::printData(DataType type)
     {
         data = "array DQ " + formatLoop<unsigned long long>(mData, mTypes[mIndex], [](unsigned long long n)
         {
-            QString value = QString().sprintf("%016llXh", n);
+            QString value = QString::asprintf("%016llXh", n);
             if(value.at(0).isLetter())
                 value.insert(0, '0');
 
@@ -640,7 +642,7 @@ void HexEditDialog::printData(DataType type)
             }
             else
             {
-                QString asmhex = QString().sprintf("%02Xh", (unsigned char)mData.at(index));
+                QString asmhex = QString::asprintf("%02Xh", (unsigned char)mData.at(index));
                 if(asmhex.at(0).isLetter())
                     asmhex.insert(0, "0");
 
@@ -666,10 +668,10 @@ void HexEditDialog::printData(DataType type)
 
     case DataPascalByte:
     {
-        data += QString().sprintf("Array [1..%u] of Byte = (\n", mData.size());
+        data += QString::asprintf("Array [1..%u] of Byte = (\n", mData.size());
         data += formatLoop<unsigned char>(mData, mTypes[mIndex], [](unsigned char n)
         {
-            return QString().sprintf("$%02X", n);
+            return QString::asprintf("$%02X", n);
         });
         data += "\n);";
     }
@@ -677,10 +679,10 @@ void HexEditDialog::printData(DataType type)
 
     case DataPascalWord:
     {
-        data += QString().sprintf("Array [1..%u] of Word = (\n", mData.size() / 2);
+        data += QString::asprintf("Array [1..%u] of Word = (\n", mData.size() / 2);
         data += formatLoop<unsigned short>(mData, mTypes[mIndex], [](unsigned short n)
         {
-            return QString().sprintf("$%04X", n);
+            return QString::asprintf("$%04X", n);
         });
         data += "\n);";
     }
@@ -688,10 +690,10 @@ void HexEditDialog::printData(DataType type)
 
     case DataPascalDword:
     {
-        data += QString().sprintf("Array [1..%u] of Dword = (\n", mData.size() / 4);
+        data += QString::asprintf("Array [1..%u] of Dword = (\n", mData.size() / 4);
         data += formatLoop<unsigned int>(mData, mTypes[mIndex], [](unsigned int n)
         {
-            return QString().sprintf("$%08X", n);
+            return QString::asprintf("$%08X", n);
         });
         data += "\n);";
     }
@@ -699,10 +701,10 @@ void HexEditDialog::printData(DataType type)
 
     case DataPascalQword:
     {
-        data += QString().sprintf("Array [1..%u] of Int64 = (\n", mData.size() / 8);
+        data += QString::asprintf("Array [1..%u] of Int64 = (\n", mData.size() / 8);
         data += formatLoop<unsigned long long>(mData, mTypes[mIndex], [](unsigned long long n)
         {
-            return QString().sprintf("$%016llX", n);
+            return QString::asprintf("$%016llX", n);
         });
         data += "\n);";
     }
@@ -714,7 +716,7 @@ void HexEditDialog::printData(DataType type)
         for(int i = 0; i < mData.size(); i++)
         {
             byte_t ch = mData.at(i);
-            data += QString().sprintf("\\x%02X", ch);
+            data += QString::asprintf("\\x%02X", ch);
         }
         data += "\"";
     }
@@ -725,7 +727,7 @@ void HexEditDialog::printData(DataType type)
         for(int i = 0; i < mData.size(); i++)
         {
             byte_t ch = mData.at(i);
-            data += QString().sprintf("%02X", ch);
+            data += QString::asprintf("%02X", ch);
         }
     }
     break;
@@ -734,7 +736,7 @@ void HexEditDialog::printData(DataType type)
     {
         data = formatLoop<GUID>(mData, mTypes[mIndex], [](GUID guid)
         {
-            return QString().sprintf("{%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X}", guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]);
+            return QString::asprintf("{%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X}", guid.Data1, guid.Data2, guid.Data3, guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]);
         });
     }
     break;
@@ -759,8 +761,9 @@ void HexEditDialog::printData(DataType type)
 
     case DataIPv6:
     {
-        INETNTOPW InetNtopW;
         int numIPs = mData.size() / 16;
+#ifdef _WIN32
+        INETNTOPW InetNtopW;
         HMODULE hWinsock = LoadLibraryW(L"ws2_32.dll");
         InetNtopW = INETNTOPW(GetProcAddress(hWinsock, "InetNtopW"));
         if(InetNtopW)
@@ -780,7 +783,8 @@ void HexEditDialog::printData(DataType type)
                 data += QString::fromWCharArray(buffer);
             }
         }
-        else //fallback for Windows XP
+        else //fallback for Windows XP and non-Windows platforms
+#endif // _WIN32
         {
             for(int i = 0; i < numIPs; i++)
             {
@@ -802,7 +806,9 @@ void HexEditDialog::printData(DataType type)
                 data += temp;
             }
         }
+#ifdef _WIN32
         FreeLibrary(hWinsock);
+#endif // _WIN32
     }
     break;
 

@@ -4,6 +4,10 @@
 #include "QHexEdit/QHexEdit.h"
 #include "Bridge.h"
 
+// Qt6 moved QTextCodec into the Core5Compat module and no longer pulls it in
+// transitively; forward-declare it here since only pointers are used.
+class QTextCodec;
+
 namespace Ui
 {
     class HexEditDialog;

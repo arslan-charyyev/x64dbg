@@ -897,7 +897,11 @@ void QHexEditPrivate::updateCursor()
 void QHexEditPrivate::adjust()
 {
     QFontMetrics metrics(this->font());
+#if QT_VERSION >= QT_VERSION_CHECK(5, 11, 0)
+    _charWidth = metrics.horizontalAdvance(QLatin1Char('9'));
+#else
     _charWidth = metrics.width(QLatin1Char('9'));
+#endif
     _charHeight = metrics.height();
 
     _xPosHex = _horizonalSpacing;
