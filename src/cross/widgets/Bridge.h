@@ -326,6 +326,7 @@ signals:
     void dbgStateChanged(DBGSTATE state);
     void updateMemory();
     void disassembleAt(duint va, duint cip);
+    void dumpAt(duint va);
     void selectInMemoryMap(duint addr);
     void selectionMemmapGet(SELECTIONDATA* selection);
     void selectionMemmapSet(const SELECTIONDATA* selection);

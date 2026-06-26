@@ -254,16 +254,48 @@ duint DbgValFromString(const char* expr)
     return DbgEval(expr, nullptr);
 }
 
-bool DbgCmdExec(const char* cmd)
+// Minimal dispatch for the view-follow commands the widgets emit ("disasm <expr>"
+// / "dump <expr>"); mirrors how Windows' GuiDisasmAt/GuiDumpAt drive the views via
+// Bridge signals. Unrecognized commands stay no-ops until the shim grows real ones.
+static bool execCommand(const char* cmd)
 {
+    if(!cmd)
+        return false;
+
+    const QString text = QString::fromUtf8(cmd).trimmed();
+    const int sep = text.indexOf(' ');
+    if(sep > 0)
+    {
+        const QString command = text.left(sep);
+        bool ok = false;
+        const duint addr = DbgEval(text.mid(sep + 1).trimmed().toUtf8().constData(), &ok);
+        if(ok)
+        {
+            if(command == "disasm" || command == "disassemble")
+            {
+                emit Bridge::getBridge()->disassembleAt(addr, addr);
+                return true;
+            }
+            if(command == "dump")
+            {
+                emit Bridge::getBridge()->dumpAt(addr);
+                return true;
+            }
+        }
+    }
+
     printf("DbgCmdExec(\"%s\")\n", cmd);
     return false;
 }
 
+bool DbgCmdExec(const char* cmd)
+{
+    return execCommand(cmd);
+}
+
 bool DbgCmdExecDirect(const char* cmd)
 {
-    printf("DbgCmdExecDirect(\"%s\")\n", cmd);
-    return false;
+    return execCommand(cmd);
 }
 
 bool DbgCmdExec(const QString & cmd)
