@@ -25,8 +25,9 @@ set(QT_LIBRARIES
     ${QT_PACKAGE}::WebSockets
 )
 if("${QT_PACKAGE}" STREQUAL "Qt6")
-    set(ADDITIONAL_COMPONENTS OpenGLWidgets)
-    list(APPEND QT_LIBRARIES Qt6::OpenGLWidgets)
+    # Core5Compat provides QTextCodec, which the codepage dialogs use unguarded.
+    set(ADDITIONAL_COMPONENTS OpenGLWidgets Core5Compat)
+    list(APPEND QT_LIBRARIES Qt6::OpenGLWidgets Qt6::Core5Compat)
 else()
     set(ADDITIONAL_COMPONENTS "")
 endif()

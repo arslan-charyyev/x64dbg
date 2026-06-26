@@ -40,6 +40,8 @@ set(widgets_SOURCES
     ${widgets_SOURCE_DIR}/BasicView/HistoryLineEdit.h
     ${widgets_SOURCE_DIR}/BasicView/StdTable.cpp
     ${widgets_SOURCE_DIR}/BasicView/StdTable.h
+    ${widgets_SOURCE_DIR}/BasicView/StdIconTable.cpp
+    ${widgets_SOURCE_DIR}/BasicView/StdIconTable.h
     ${widgets_SOURCE_DIR}/Disassembler/Architecture.cpp
     ${widgets_SOURCE_DIR}/Disassembler/Architecture.h
     ${widgets_SOURCE_DIR}/Disassembler/QZydis.cpp
@@ -72,6 +74,26 @@ set(widgets_SOURCES
     ${widgets_SOURCE_DIR}/Gui/ReleaseNotesDialog.ui
     ${widgets_SOURCE_DIR}/Gui/ImageTextBrowser.cpp
     ${widgets_SOURCE_DIR}/Gui/ImageTextBrowser.h
+    ${widgets_SOURCE_DIR}/Gui/MemoryMapView.cpp
+    ${widgets_SOURCE_DIR}/Gui/MemoryMapView.h
+    ${widgets_SOURCE_DIR}/Gui/PageMemoryRights.cpp
+    ${widgets_SOURCE_DIR}/Gui/PageMemoryRights.h
+    ${widgets_SOURCE_DIR}/Gui/PageMemoryRights.ui
+    ${widgets_SOURCE_DIR}/Gui/VirtualModDialog.cpp
+    ${widgets_SOURCE_DIR}/Gui/VirtualModDialog.h
+    ${widgets_SOURCE_DIR}/Gui/VirtualModDialog.ui
+    ${widgets_SOURCE_DIR}/Gui/GotoDialog.cpp
+    ${widgets_SOURCE_DIR}/Gui/GotoDialog.h
+    ${widgets_SOURCE_DIR}/Gui/GotoDialog.ui
+    ${widgets_SOURCE_DIR}/Gui/HexEditDialog.cpp
+    ${widgets_SOURCE_DIR}/Gui/HexEditDialog.h
+    ${widgets_SOURCE_DIR}/Gui/HexEditDialog.ui
+    ${widgets_SOURCE_DIR}/Gui/HexLineEdit.cpp
+    ${widgets_SOURCE_DIR}/Gui/HexLineEdit.h
+    ${widgets_SOURCE_DIR}/Gui/HexLineEdit.ui
+    ${widgets_SOURCE_DIR}/Gui/CodepageSelectionDialog.cpp
+    ${widgets_SOURCE_DIR}/Gui/CodepageSelectionDialog.h
+    ${widgets_SOURCE_DIR}/Gui/CodepageSelectionDialog.ui
     ${widgets_SOURCE_DIR}/Memory/MemoryPage.cpp
     ${widgets_SOURCE_DIR}/Memory/MemoryPage.h
     ${widgets_SOURCE_DIR}/Utils/ActionHelpers.h
@@ -90,10 +112,20 @@ set(widgets_SOURCES
     ${widgets_SOURCE_DIR}/Utils/ValidateExpressionThread.cpp
     ${widgets_SOURCE_DIR}/Utils/ValidateExpressionThread.h
     ${widgets_SOURCE_DIR}/Utils/VaHistory.h
+    ${widgets_SOURCE_DIR}/Utils/SymbolAutoCompleteModel.cpp
+    ${widgets_SOURCE_DIR}/Utils/SymbolAutoCompleteModel.h
     ${widgets_SOURCE_DIR}/Gui/RegistersView.cpp
     ${widgets_SOURCE_DIR}/Gui/RegistersView.h
     ${widgets_SOURCE_DIR}/Accessible/AccessibleRegistersView.cpp
     ${widgets_SOURCE_DIR}/Accessible/AccessibleRegistersView.h
+    ${widgets_SOURCE_DIR}/QHexEdit/ArrayCommand.cpp
+    ${widgets_SOURCE_DIR}/QHexEdit/ArrayCommand.h
+    ${widgets_SOURCE_DIR}/QHexEdit/QHexEdit.cpp
+    ${widgets_SOURCE_DIR}/QHexEdit/QHexEdit.h
+    ${widgets_SOURCE_DIR}/QHexEdit/QHexEditPrivate.cpp
+    ${widgets_SOURCE_DIR}/QHexEdit/QHexEditPrivate.h
+    ${widgets_SOURCE_DIR}/QHexEdit/XByteArray.cpp
+    ${widgets_SOURCE_DIR}/QHexEdit/XByteArray.h
 )
 
 include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -108,7 +140,10 @@ add_library(x64dbg::widgets ALIAS x64dbg_widgets)
 target_include_directories(x64dbg_widgets PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${widgets_SOURCE_DIR}
+    ${widgets_SOURCE_DIR}/BasicView
+    ${widgets_SOURCE_DIR}/Gui
     ${widgets_SOURCE_DIR}/Utils
+    ${widgets_SOURCE_DIR}/QHexEdit
 )
 
 source_group(TREE ${widgets_SOURCE_DIR} FILES ${widgets_SOURCES})
