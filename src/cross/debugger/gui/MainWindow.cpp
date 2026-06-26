@@ -11,6 +11,7 @@
 #include <Memory/MemoryPage.h>
 #include "core/LinuxArchitecture.h"
 #include "gui/CPUStack.h"
+#include "Gui/MemoryMapView.h"
 
 static LinuxArchitecture gArch;
 
@@ -38,6 +39,19 @@ MainWindow::MainWindow(QWidget* parent)
     }, Qt::QueuedConnection);
     connect(mProvider, &DbgAdapter::logMessage, this, &MainWindow::onLogMessage, Qt::QueuedConnection);
     connect(mProvider, &DbgAdapter::stopped, this, &MainWindow::onStopped, Qt::QueuedConnection);
+
+    // MemoryMapView's "Follow in Disassembler/Dump" issue these commands via the shim,
+    // which re-emits them as Bridge signals to drive the CPU tab's existing views.
+    connect(Bridge::getBridge(), &Bridge::disassembleAt, this, [this](duint va, duint)
+    {
+        mDisassembly->gotoAddress(va);
+        mTabWidget->setCurrentIndex(0);
+    });
+    connect(Bridge::getBridge(), &Bridge::dumpAt, this, [this](duint va)
+    {
+        mHexDump->printDumpAt(va);
+        mTabWidget->setCurrentIndex(0);
+    });
 
     const auto menuFile = menuBar()->addMenu(tr("&File"));
     const auto actionOpen = menuFile->addAction(tr("&Open..."), this, &MainWindow::onOpen);
@@ -139,7 +153,8 @@ void MainWindow::setupTabs()
     };
 
     mTabWidget->addTab(makePlaceholder(tr("Breakpoints view - not yet implemented")), icon("breakpoint"), tr("Breakpoints"));
-    mTabWidget->addTab(makePlaceholder(tr("Memory map view - not yet implemented")), icon("memory-map"), tr("Memory Map"));
+    mMemoryMap = new MemoryMapView();
+    mTabWidget->addTab(mMemoryMap, icon("memory-map"), tr("Memory Map"));
     mTabWidget->addTab(makePlaceholder(tr("Call stack view - not yet implemented")), icon("callstack"), tr("Call Stack"));
     mTabWidget->addTab(makePlaceholder(tr("Threads view - not yet implemented")), icon("arrow-threads"), tr("Threads"));
 
@@ -264,6 +279,7 @@ void MainWindow::onProcessExited(const int exitCode) const
     DbgSetMemoryProvider(nullptr);
     mDisassembly->reloadData();
     mHexDump->reloadData();
+    mMemoryMap->refreshMapSlot();
     constexpr REGDUMP emptyDump{};
     mRegisters->setRegisters(&emptyDump);
     statusBar()->showMessage(QString("Process exited with code %1").arg(exitCode));
@@ -307,6 +323,7 @@ void MainWindow::onStopped(const duint rip, const QString & reason) const
 {
     mDisassembly->gotoAddress(rip);
     mDisassembly->reloadData();
+    mMemoryMap->refreshMapSlot();
     statusBar()->showMessage(QString("%1 - 0x%2").arg(reason).arg(rip, 0, 16));
     mTabWidget->setCurrentIndex(0);
 }

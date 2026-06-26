@@ -10,6 +10,7 @@
 
 class QThread;
 class CPUStack;
+class MemoryMapView;
 
 class MainWindow : public QMainWindow
 {
@@ -46,5 +47,6 @@ private:
     HexDump* mHexDump = nullptr;
     CPUStack* mStack = nullptr;
     RegistersView* mRegisters = nullptr;
+    MemoryMapView* mMemoryMap = nullptr;
     QTextBrowser* mLog = nullptr;
 };
