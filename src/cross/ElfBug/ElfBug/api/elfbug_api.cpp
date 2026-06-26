@@ -82,7 +82,7 @@ struct ElfBugDebugger : ElfBug::Debugger
                 size_t len = strlen(p);
                 while(len > 0 && (p[len - 1] == '\n' || p[len - 1] == '\r' || p[len - 1] == ' '))
                     --len;
-                if(len > 0 && p[0] != '[')
+                if(len > 0)
                     pathname.assign(p, len);
 
                 static constexpr std::string_view deletedSuffix{" (deleted)"};
@@ -107,7 +107,9 @@ struct ElfBugDebugger : ElfBug::Debugger
         moduleBases.clear();
         for(const auto& r : memoryMap)
         {
-            if(r.pathname.empty())
+            // Only file-backed mappings are modules; [vdso]/[stack]/... carry a
+            // pathname for display but must not resolve as ModBase/ModName.
+            if(r.pathname.empty() || r.pathname.front() != '/')
                 continue;
             auto it = moduleBases.find(r.pathname);
             if(it == moduleBases.end() || r.start < it->second)
@@ -132,7 +134,7 @@ struct ElfBugDebugger : ElfBug::Debugger
     {
         std::lock_guard lock(mapMutex);
         const auto* region = findRegion(addr);
-        if(!region || region->pathname.empty())
+        if(!region || region->pathname.empty() || region->pathname.front() != '/')
             return false;
 
         const auto it = moduleBases.find(region->pathname);

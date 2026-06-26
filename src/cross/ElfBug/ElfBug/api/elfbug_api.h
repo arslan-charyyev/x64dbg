@@ -88,7 +88,7 @@ typedef struct
     bool write;
     bool execute;
     bool shared;                // true = shared ('s'), false = private ('p')
-    char path[ELFBUG_MAX_PATH]; // empty for anonymous/[heap]/[stack]/... regions
+    char path[ELFBUG_MAX_PATH]; // /proc/maps pathname column: file path or [pseudo] name (e.g. [stack]); empty if anonymous
 } ElfBugMemRegion;
 
 // Copies up to `maxCount` regions into `out` (pass null to query the count) and
