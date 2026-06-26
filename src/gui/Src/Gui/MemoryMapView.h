@@ -1,6 +1,7 @@
 #pragma once
 
 #include "StdIconTable.h"
+#include "Bridge.h"
 
 class GotoDialog;
 
