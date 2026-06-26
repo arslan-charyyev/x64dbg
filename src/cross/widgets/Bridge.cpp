@@ -145,6 +145,27 @@ DBGFUNCTIONS* DbgFunctions()
         {
             return gMemory.load()->write(start, data, size);
         };
+        f.MemUpdateMap = [] {};
+        f.GetPageRights = [](duint addr, char* rights)
+        {
+            return false;
+        };
+        f.SetPageRights = [](duint addr, const char* rights)
+        {
+            return false;
+        };
+        f.GetUserComment = [](duint addr, char* comment)
+        {
+            return false;
+        };
+        f.FileOffsetToVa = [](const char* modname, duint offset) -> duint
+        {
+            return 0;
+        };
+        f.SymAutoComplete = [](const char* Search, char** Buffer, int MaxSymbols)
+        {
+            return 0;
+        };
         return f;
     }();
     return &f;
@@ -337,6 +358,24 @@ void DbgDelEncodeTypeSegment(duint start)
 {
 }
 
+bool DbgMemMap(MEMMAP* memmap)
+{
+    return false;
+}
+
+void DbgMenuPrepare(GUIMENUTYPE hMenu)
+{
+}
+
+bool DbgSetCommentAt(duint addr, const char* text)
+{
+    return false;
+}
+
+void DbgSettingsUpdated()
+{
+}
+
 // GUI
 
 void GuiExecuteOnGuiThreadEx(GuiCallback callback, void* data)
@@ -366,6 +405,10 @@ void GuiUpdatePatches()
 {
 }
 
+void GuiUpdateMemoryView()
+{
+}
+
 Bridge* Bridge::getBridge()
 {
     static Bridge i;
@@ -380,4 +423,14 @@ void Bridge::CopyToClipboard(const QString & str)
 void Bridge::addMsgToLog(const QByteArray & bytes)
 {
     printf("addMsgToLog: %s\n", bytes.data());
+}
+
+void Bridge::emitMenuAddToList(QWidget* parent, QMenu* menu, GUIMENUTYPE hMenu, int hParentMenu)
+{
+    // TODO: plugin menu integration is not implemented in the cross shim yet.
+}
+
+void Bridge::setResult(BridgeResult::Type type, dsint result)
+{
+    // TODO: wire synchronous GUI-request results once the debugger drives the Bridge.
 }

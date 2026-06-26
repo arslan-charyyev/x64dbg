@@ -21,6 +21,72 @@ void BridgeFree(void* ptr);
 #define MAX_MODULE_SIZE 256
 #define MAX_COMMENT_SIZE 256
 #define MAX_STRING_SIZE 2048
+#define RIGHTS_STRING_SIZE (sizeof("ERWCG"))
+
+// PAGE_SIZE is also defined by some Linux system headers; keep ours guarded.
+#ifndef PAGE_SIZE
+#define PAGE_SIZE 0x1000
+#endif // PAGE_SIZE
+
+#define PAGE_NOACCESS 0x01
+#define PAGE_READONLY 0x02
+#define PAGE_READWRITE 0x04
+#define PAGE_WRITECOPY 0x08
+#define PAGE_EXECUTE 0x10
+#define PAGE_EXECUTE_READ 0x20
+#define PAGE_EXECUTE_READWRITE 0x40
+#define PAGE_EXECUTE_WRITECOPY 0x80
+#define PAGE_GUARD 0x100
+
+#define MEM_PRIVATE 0x20000
+#define MEM_MAPPED 0x40000
+#define MEM_IMAGE 0x1000000
+
+enum MODULEPARTY
+{
+    mod_user = 0,
+    mod_system = 1,
+};
+
+typedef enum
+{
+    GUI_PLUGIN_MENU,
+    GUI_DISASM_MENU,
+    GUI_DUMP_MENU,
+    GUI_STACK_MENU,
+    GUI_GRAPH_MENU,
+    GUI_MEMMAP_MENU,
+    GUI_SYMMOD_MENU,
+} GUIMENUTYPE;
+
+typedef struct
+{
+    duint BaseAddress;
+    duint AllocationBase;
+    DWORD AllocationProtect;
+    duint RegionSize;
+    DWORD State;
+    DWORD Protect;
+    DWORD Type;
+} MEMORY_BASIC_INFORMATION;
+
+typedef struct
+{
+    MEMORY_BASIC_INFORMATION mbi;
+    char info[MAX_MODULE_SIZE];
+} MEMPAGE;
+
+typedef struct
+{
+    int count;
+    MEMPAGE* page;
+} MEMMAP;
+
+typedef struct
+{
+    duint start;
+    duint end;
+} SELECTIONDATA;
 
 enum SEGTYPE
 {
@@ -108,6 +174,12 @@ struct DBGFUNCTIONS
     int (*ModGetParty)(duint addr);
     bool (*PatchInRange)(duint start, duint end);
     bool (*MemPatch)(duint start, const unsigned char* data, duint size);
+    void (*MemUpdateMap)();
+    bool (*GetPageRights)(duint addr, char* rights);
+    bool (*SetPageRights)(duint addr, const char* rights);
+    bool (*GetUserComment)(duint addr, char* comment);
+    duint(*FileOffsetToVa)(const char* modname, duint offset);
+    int (*SymAutoComplete)(const char* Search, char** Buffer, int MaxSymbols);
 };
 
 struct MemoryProvider
@@ -155,6 +227,10 @@ void* DbgGetEncodeTypeBuffer(duint addr, duint* size);
 bool DbgSetEncodeType(duint addr, duint size, ENCODETYPE type);
 void DbgDelEncodeTypeRange(duint start, duint end);
 void DbgDelEncodeTypeSegment(duint start);
+bool DbgMemMap(MEMMAP* memmap);
+void DbgMenuPrepare(GUIMENUTYPE hMenu);
+bool DbgSetCommentAt(duint addr, const char* text);
+void DbgSettingsUpdated();
 
 struct TYPEDESCRIPTOR;
 
@@ -184,10 +260,54 @@ void GuiExecuteOnGuiThreadEx(GuiCallback callback, void* data);
 void GuiAddLogMessage(const char* msg);
 void GuiUpdateAllViews();
 void GuiUpdatePatches();
+void GuiUpdateMemoryView();
 
 // QString helpers
 bool DbgCmdExec(const QString & cmd);
 bool DbgCmdExecDirect(const QString & cmd);
+
+class QWidget;
+class QMenu;
+
+// Mirrors the Windows Bridge's synchronous GUI-request result types. The cross
+// shim keeps the full enum for parity; only a few are wired so far.
+class BridgeResult
+{
+public:
+    enum Type
+    {
+        ScriptAdd,
+        ScriptMessage,
+        RefInitialize,
+        MenuAddToList,
+        MenuAdd,
+        MenuAddEntry,
+        MenuAddSeparator,
+        MenuClear,
+        MenuRemove,
+        SelectionGet,
+        SelectionSet,
+        GetlineWindow,
+        MenuSetIcon,
+        MenuSetEntryIcon,
+        MenuSetEntryChecked,
+        MenuSetVisible,
+        MenuSetEntryVisible,
+        MenuSetName,
+        MenuSetEntryName,
+        GetGlobalNotes,
+        GetDebuggeeNotes,
+        RegisterScriptLang,
+        LoadGraph,
+        GraphAt,
+        GetActiveView,
+        TypeAddNode,
+        TypeClear,
+        MenuSetEntryHotkey,
+        GraphCurrent,
+        Last,
+    };
+};
 
 class Bridge : public QObject
 {
@@ -200,6 +320,13 @@ signals:
     void updateDump();
     void updateDisassembly();
     void dbgStateChanged(DBGSTATE state);
+    void updateMemory();
+    void disassembleAt(duint va, duint cip);
+    void selectInMemoryMap(duint addr);
+    void selectionMemmapGet(SELECTIONDATA* selection);
+    void selectionMemmapSet(const SELECTIONDATA* selection);
+    void focusMemmap();
+    void getDumpAttention();
 
     void typeAddNode(void* parent, const TYPEDESCRIPTOR* descriptor, void** result);
     void typeClear();
@@ -210,6 +337,8 @@ public:
     static void CopyToClipboard(const QString & str);
 
     void addMsgToLog(const QByteArray & bytes);
+    void emitMenuAddToList(QWidget* parent, QMenu* menu, GUIMENUTYPE hMenu, int hParentMenu = -1);
+    void setResult(BridgeResult::Type type, dsint result = 0);
 
     duint mLastCip = 0;
     bool mIsRunning = true;

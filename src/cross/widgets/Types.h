@@ -9,11 +9,22 @@
 // TODO: do something cross platform
 using duint = uint64_t;
 using dsint = int64_t;
+using byte_t = uint8_t;
 
 #ifndef _WIN32
 using DWORD = uint32_t;
 using WORD = uint16_t;
 using NTSTATUS = uint32_t;
+
+// Win32 GUID stand-in for widgets that interpret raw bytes as a GUID.
+typedef struct _GUID
+{
+    DWORD Data1;
+    WORD Data2;
+    WORD Data3;
+    unsigned char Data4[8];
+} GUID;
+
 #define _TRUNCATE ((size_t)-1)
 
 template<size_t Count, class... Args>
