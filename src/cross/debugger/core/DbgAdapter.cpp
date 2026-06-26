@@ -64,7 +64,9 @@ static DWORD regionType(const ElfBugMemRegion & region)
 {
     if(region.shared)
         return MEM_MAPPED;
-    if(region.path[0] != '\0')
+    // Only real file-backed mappings are images; [vdso]/[stack]/... keep their
+    // pathname for display but classify as private.
+    if(region.path[0] == '/')
         return MEM_IMAGE;
     return MEM_PRIVATE;
 }
