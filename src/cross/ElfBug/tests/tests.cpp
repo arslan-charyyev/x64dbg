@@ -630,3 +630,190 @@ TEST_CASE("Memory map matches /proc/<pid>/maps with permissions", "[memmap]")
 
     ElfBugDestroy(dbg);
 }
+
+TEST_CASE("Breakpoint list reflects set and delete", "[breakpoint]")
+{
+    using namespace ElfBug::test;
+
+    struct BpSync
+    {
+        std::mutex m;
+        std::condition_variable cv;
+        bool systemBreakpoint = false;
+    } sync;
+
+    ElfBugCallbacks cb = {};
+    cb.userdata = &sync;
+    cb.onSystemBreakpoint = [](void* userdata)
+    {
+        auto* s = static_cast<BpSync*>(userdata);
+        {
+            std::lock_guard<std::mutex> lock(s->m);
+            s->systemBreakpoint = true;
+        }
+        s->cv.notify_all();
+    };
+
+    ElfBugDebugger* dbg = ElfBugCreate(&cb);
+    REQUIRE(dbg != nullptr);
+    const std::string path = FIXTURE("hello_elfbug");
+    REQUIRE(ElfBugInit(dbg, path.c_str()));
+
+    std::thread loop([&] { ElfBugStart(dbg); });
+
+    {
+        std::unique_lock<std::mutex> lock(sync.m);
+        REQUIRE(sync.cv.wait_for(lock, std::chrono::seconds(5),
+                                 [&] { return sync.systemBreakpoint; }));
+    }
+
+    const pid_t pid = ElfBugGetPid(dbg);
+    REQUIRE(pid > 0);
+
+    // Nothing is set yet.
+    REQUIRE(ElfBugGetBreakpoints(dbg, nullptr, 0) == 0);
+
+    const auto hit = ResolveRuntimeAddress(path, pid, "hit_me");
+    const auto entry = ResolveRuntimeAddress(path, pid, "main");
+    REQUIRE(hit.has_value());
+    REQUIRE(entry.has_value());
+    REQUIRE(*hit != *entry);
+
+    // A pending set is reflected immediately, just like ElfBugIsBreakpointEffective.
+    REQUIRE(ElfBugSetBreakpoint(dbg, *hit));
+    REQUIRE(ElfBugIsBreakpointEffective(dbg, *hit));
+    {
+        ElfBugBreakpoint bps[4] = {};
+        REQUIRE(ElfBugGetBreakpoints(dbg, bps, 4) == 1);
+        REQUIRE(bps[0].address == *hit);
+    }
+
+    // A second breakpoint: the count grows and the list is sorted by address.
+    REQUIRE(ElfBugSetBreakpoint(dbg, *entry));
+    {
+        ElfBugBreakpoint bps[4] = {};
+        REQUIRE(ElfBugGetBreakpoints(dbg, bps, 4) == 2);
+        REQUIRE(bps[0].address < bps[1].address);
+        REQUIRE(bps[0].address == std::min(*hit, *entry));
+        REQUIRE(bps[1].address == std::max(*hit, *entry));
+    }
+
+    // Capacity contract: a short buffer still reports the full total and fills only what fits.
+    {
+        ElfBugBreakpoint one[1] = {};
+        REQUIRE(ElfBugGetBreakpoints(dbg, one, 1) == 2);
+        REQUIRE(one[0].address == std::min(*hit, *entry));
+    }
+
+    // A pending delete is reflected immediately too.
+    REQUIRE(ElfBugDeleteBreakpoint(dbg, *hit));
+    REQUIRE_FALSE(ElfBugIsBreakpointEffective(dbg, *hit));
+    {
+        ElfBugBreakpoint bps[4] = {};
+        REQUIRE(ElfBugGetBreakpoints(dbg, bps, 4) == 1);
+        REQUIRE(bps[0].address == *entry);
+    }
+
+    // Clear the rest so the inferior runs free to exit (no stop-at-breakpoint).
+    REQUIRE(ElfBugDeleteBreakpoint(dbg, *entry));
+    REQUIRE(ElfBugGetBreakpoints(dbg, nullptr, 0) == 0);
+
+    ElfBugContinue(dbg);
+    loop.join();
+
+    // The set is cleared once the inferior exits.
+    REQUIRE(ElfBugGetBreakpoints(dbg, nullptr, 0) == 0);
+
+    ElfBugDestroy(dbg);
+}
+
+TEST_CASE("Breakpoint list reflects applied breakpoints after a step", "[breakpoint]")
+{
+    using namespace ElfBug::test;
+
+    struct BpSync
+    {
+        std::mutex m;
+        std::condition_variable cv;
+        bool systemBreakpoint = false;
+        bool stepped = false;
+        bool exited = false;
+    } sync;
+
+    ElfBugCallbacks cb = {};
+    cb.userdata = &sync;
+    cb.onSystemBreakpoint = [](void* userdata)
+    {
+        auto* s = static_cast<BpSync*>(userdata);
+        {
+            std::lock_guard<std::mutex> lock(s->m);
+            s->systemBreakpoint = true;
+        }
+        s->cv.notify_all();
+    };
+    cb.onStep = [](void* userdata)
+    {
+        auto* s = static_cast<BpSync*>(userdata);
+        {
+            std::lock_guard<std::mutex> lock(s->m);
+            s->stepped = true;
+        }
+        s->cv.notify_all();
+    };
+    cb.onExitProcess = [](int, void* userdata)
+    {
+        auto* s = static_cast<BpSync*>(userdata);
+        {
+            std::lock_guard<std::mutex> lock(s->m);
+            s->exited = true;
+        }
+        s->cv.notify_all();
+    };
+
+    ElfBugDebugger* dbg = ElfBugCreate(&cb);
+    REQUIRE(dbg != nullptr);
+    const std::string path = FIXTURE("hello_elfbug");
+    REQUIRE(ElfBugInit(dbg, path.c_str()));
+
+    std::thread loop([&] { ElfBugStart(dbg); });
+
+    {
+        std::unique_lock<std::mutex> lock(sync.m);
+        REQUIRE(sync.cv.wait_for(lock, std::chrono::seconds(5),
+                                 [&] { return sync.systemBreakpoint; }));
+    }
+
+    const pid_t pid = ElfBugGetPid(dbg);
+    REQUIRE(pid > 0);
+    const auto hit = ResolveRuntimeAddress(path, pid, "hit_me");
+    REQUIRE(hit.has_value());
+
+    REQUIRE(ElfBugSetBreakpoint(dbg, *hit));
+
+    // A single step flushes the pending queue into the applied set, so the next
+    // enumeration reads breakpointAddrs with an empty queue.
+    ElfBugStepInto(dbg);
+    {
+        std::unique_lock<std::mutex> lock(sync.m);
+        REQUIRE(sync.cv.wait_for(lock, std::chrono::seconds(5),
+                                 [&] { return sync.stepped; }));
+    }
+
+    REQUIRE(ElfBugIsBreakpointEffective(dbg, *hit));
+    ElfBugBreakpoint bps[4] = {};
+    REQUIRE(ElfBugGetBreakpoints(dbg, bps, 4) == 1);
+    REQUIRE(bps[0].address == *hit);
+
+    // The breakpoint is armed in memory now, so kill rather than continue (a plain
+    // continue would trap on it instead of running to exit).
+    REQUIRE(ElfBugStop(dbg));
+    {
+        std::unique_lock<std::mutex> lock(sync.m);
+        REQUIRE(sync.cv.wait_for(lock, std::chrono::seconds(5),
+                                 [&] { return sync.exited; }));
+    }
+    loop.join();
+
+    REQUIRE(ElfBugGetBreakpoints(dbg, nullptr, 0) == 0);
+    ElfBugDestroy(dbg);
+}
