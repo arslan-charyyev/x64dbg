@@ -360,7 +360,24 @@ void DbgDelEncodeTypeSegment(duint start)
 
 bool DbgMemMap(MEMMAP* memmap)
 {
-    return false;
+    if(!memmap)
+        return false;
+
+    memmap->count = 0;
+    memmap->page = nullptr;
+
+    auto* provider = gMemory.load();
+    const size_t count = provider->getMemoryMap(nullptr, 0);
+    if(count == 0)
+        return false;
+
+    // The widget frees memmap->page via BridgeFree (see MemoryMapView::refreshMapSlot).
+    memmap->page = static_cast<MEMPAGE*>(BridgeAlloc(count * sizeof(MEMPAGE)));
+    if(!memmap->page)
+        return false;
+
+    memmap->count = static_cast<int>(provider->getMemoryMap(memmap->page, count));
+    return memmap->count > 0;
 }
 
 void DbgMenuPrepare(GUIMENUTYPE hMenu)

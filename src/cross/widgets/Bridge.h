@@ -38,6 +38,8 @@ void BridgeFree(void* ptr);
 #define PAGE_EXECUTE_WRITECOPY 0x80
 #define PAGE_GUARD 0x100
 
+#define MEM_COMMIT 0x1000
+
 #define MEM_PRIVATE 0x20000
 #define MEM_MAPPED 0x40000
 #define MEM_IMAGE 0x1000000
@@ -193,6 +195,8 @@ struct MemoryProvider
     virtual bool writeRegister(const char* name, duint value) { return false; }
     virtual bool modBaseFromAddr(duint addr, duint & base) { return false; }
     virtual bool modNameFromAddr(duint addr, char* buf, duint bufSize, bool extension) { return false; }
+    // Fill up to maxCount pages (pass out=null to query the total count) and return the number written.
+    virtual size_t getMemoryMap(MEMPAGE* out, size_t maxCount) { return 0; }
 };
 
 void DbgSetMemoryProvider(MemoryProvider* provider);
