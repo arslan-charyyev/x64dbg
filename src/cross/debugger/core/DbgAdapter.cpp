@@ -1,5 +1,8 @@
 #include "core/DbgAdapter.h"
+#include <algorithm>
 #include <cassert>
+#include <cstring>
+#include <vector>
 
 static REGDUMP toRegDump(const ElfBugRegisters & regs)
 {
@@ -38,6 +41,47 @@ static REGDUMP toRegDump(const ElfBugRegisters & regs)
     dump.flags.d = (regs.eflags & (1 << 10)) != 0;
     dump.flags.o = (regs.eflags & (1 << 11)) != 0;
     return dump;
+}
+
+static DWORD regionProtect(const ElfBugMemRegion & region)
+{
+    if(region.execute)
+    {
+        if(region.write)
+            return PAGE_EXECUTE_READWRITE;
+        if(region.read)
+            return PAGE_EXECUTE_READ;
+        return PAGE_EXECUTE;
+    }
+    if(region.write)
+        return PAGE_READWRITE;
+    if(region.read)
+        return PAGE_READONLY;
+    return PAGE_NOACCESS;
+}
+
+static DWORD regionType(const ElfBugMemRegion & region)
+{
+    if(region.shared)
+        return MEM_MAPPED;
+    if(region.path[0] != '\0')
+        return MEM_IMAGE;
+    return MEM_PRIVATE;
+}
+
+static MEMPAGE toMemPage(const ElfBugMemRegion & region)
+{
+    MEMPAGE page = {};
+    const DWORD protect = regionProtect(region);
+    page.mbi.BaseAddress = region.start;
+    page.mbi.AllocationBase = region.start;
+    page.mbi.RegionSize = region.end - region.start;
+    page.mbi.State = MEM_COMMIT;
+    page.mbi.Protect = protect;
+    page.mbi.AllocationProtect = protect;
+    page.mbi.Type = regionType(region);
+    strncpy(page.info, region.path, sizeof(page.info) - 1);
+    return page;
 }
 
 std::atomic<DbgAdapter*> DbgAdapter::sInstance{nullptr};
@@ -140,6 +184,22 @@ bool DbgAdapter::modBaseFromAddr(const duint addr, duint & base)
 bool DbgAdapter::modNameFromAddr(const duint addr, char* buf, const duint bufSize, const bool extension)
 {
     return ElfBugModNameFromAddr(mDebugger, addr, buf, bufSize, extension);
+}
+
+size_t DbgAdapter::getMemoryMap(MEMPAGE* out, const size_t maxCount)
+{
+    if(!mDebugger)
+        return 0;
+    if(!out || maxCount == 0)
+        return ElfBugGetMemoryMap(mDebugger, nullptr, 0);
+
+    std::vector<ElfBugMemRegion> regions(maxCount);
+    // ElfBugGetMemoryMap returns the total region count, which can exceed maxCount
+    // if the map grew since the sizing query; only maxCount entries were written.
+    const size_t count = std::min(ElfBugGetMemoryMap(mDebugger, regions.data(), maxCount), maxCount);
+    for(size_t i = 0; i < count; ++i)
+        out[i] = toMemPage(regions[i]);
+    return count;
 }
 
 // -- Debugger control --

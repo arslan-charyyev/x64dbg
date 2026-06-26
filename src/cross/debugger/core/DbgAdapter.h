@@ -23,6 +23,7 @@ public:
     bool writeRegister(const char* name, duint value) override;
     bool modBaseFromAddr(duint addr, duint & base) override;
     bool modNameFromAddr(duint addr, char* buf, duint bufSize, bool extension) override;
+    size_t getMemoryMap(MEMPAGE* out, size_t maxCount) override;
 
     bool loadEngine();
     bool launch(const char* path) const;
