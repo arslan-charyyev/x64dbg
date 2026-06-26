@@ -1,3 +1,53 @@
+# x64dbg — Linux/cross-platform port
+
+> **This is a hard fork of [x64dbg/x64dbg](https://github.com/x64dbg/x64dbg).** It ports x64dbg — a Windows-only debugger for malware analysis and reverse engineering — to Linux, and makes its Qt GUI widgets reusable on any platform. The fork has diverged from upstream; development happens directly on this repository's `development` branch. The original project's README is preserved [below](#x64dbg).
+
+## What this fork is
+
+Upstream x64dbg is Windows-only (TitanEngine/GleeBug core, Win32 APIs, Qt5 WinExtras). This fork brings it to Linux **without reimplementing the GUI**: it compiles the *actual* Windows widget sources (`src/gui/Src/*`) against a platform-neutral **Bridge shim**, backed by **ElfBug**, a native ptrace-based ELF debugger engine (x86-64 + i386). Two goals, in order:
+
+1. **Keep the Qt GUI widgets reusable cross-platform** — the Windows widgets compile and run on Linux unchanged, and as standalone Qt apps off the debugger entirely.
+2. **Grow Linux feature parity with the Windows version**, one vertical feature at a time, behind that reusable-widget foundation.
+
+All port work lives under [`src/cross/`](src/cross), a separate CMake project from the (Windows-only) root.
+
+## Architecture: the vertical slice
+
+Every Linux feature is wired through the same chain — **Qt widget** (`src/gui/Src/*`, reused as-is) → **Bridge shim** (`src/cross/widgets/`, reimplements the `Dbg*`/`Bridge*`/`Gui*` API the widgets expect) → **`DbgAdapter`** (`src/cross/debugger/`, implements the widgets' `MemoryProvider` and drives the engine) → **ElfBug** (`src/cross/ElfBug/`, ptrace + `/proc/<pid>/maps`).
+
+For example, the Memory Map flows `MemoryMapView` → `DbgMemMap` → `MemoryProvider` → `DbgAdapter` → `ElfBugGetMemoryMap()` → `/proc/<pid>/maps`.
+
+## Build & run (Linux)
+
+```bash
+cd src/cross
+cmake -B build -G Ninja -DCMAKE_UNITY_BUILD=ON
+cmake --build build
+./build/debugger            # the Linux x64dbg
+```
+
+Qt5 and Qt6 are both supported and auto-detected. Standalone widget demos (`minidump`, `hex_viewer`, `remote_table`, `release_notes`) build from the same project and prove the widgets are reusable outside the debugger.
+
+## Roadmap
+
+Each milestone is one debugger feature delivered through the full vertical slice above; progress is tracked as [GitHub milestones](https://github.com/arslan-charyyev/x64dbg/milestones).
+
+- [x] **Foundation** — the cross-platform Qt widget library (`x64dbg::widgets`) is in place: the real Windows widgets compiling on Linux against the Bridge shim, plus standalone demo apps. Individual widgets are ported per feature, as needed.
+- [x] **01) Memory Map** — live `/proc/<pid>/maps` view (regions, permissions, module and `[pseudo]` names).
+- [ ] **02) Breakpoints** — Breakpoints view plus full breakpoint management from the GUI.
+- [ ] **03) Threads** — thread list with active-thread switching (registers, stack and disassembly follow the selection).
+- [ ] **04) Modules & Symbols** — module enumeration and ELF symbol resolution, surfacing labels across the whole UI.
+- [ ] **05) Expression evaluator** — a real `DbgEval` over registers, memory and symbols, replacing the hex-only stub.
+- [ ] **06) Call Stack** — stack unwinding into a Call Stack view.
+- [ ] **07) Command bar & scripting** — a command input bar and scripting.
+- [ ] **08) Session & execution control** — run/step/restart and session-lifecycle parity.
+- [ ] **09) References & xrefs** — reference and cross-reference analysis with their views.
+- [ ] **10) Source, locals & watch (DWARF)** — DWARF-backed source view, locals and watches.
+- [ ] **11) Patches** — in-memory patching and patch management.
+- [ ] **12) Trace** — execution tracing.
+
+---
+
 # x64dbg
 
 <img width="100" src="https://github.com/x64dbg/x64dbg/raw/development/src/bug_black.png"/>
