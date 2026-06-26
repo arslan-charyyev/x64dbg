@@ -111,13 +111,10 @@ namespace
     }
 
     // The engine's documented path contract, applied to a raw kernel pathname:
-    // bracketed pseudo-paths ([heap]/[stack]/[vdso]/...) and anonymous regions
-    // report an empty path, and a trailing " (deleted)" marker is stripped.
+    // the pathname column is reported verbatim (a file path or a [pseudo] name
+    // like [heap]/[stack]/[vdso]), with only a trailing " (deleted)" marker stripped.
     std::string ExpectedEnginePath(const std::string & rawPath)
     {
-        if(rawPath.empty() || rawPath.front() == '[')
-            return "";
-
         const std::string deleted = " (deleted)";
         if(rawPath.size() >= deleted.size() &&
                 rawPath.compare(rawPath.size() - deleted.size(), deleted.size(), deleted) == 0)
@@ -598,6 +595,7 @@ TEST_CASE("Memory map matches /proc/<pid>/maps with permissions", "[memmap]")
     bool sawExecutable = false;
     bool sawWritable = false;
     bool sawFixture = false;
+    bool sawBracketed = false;
     for(size_t i = 0; i < regions.size(); ++i)
     {
         INFO("region " << i);
@@ -612,10 +610,12 @@ TEST_CASE("Memory map matches /proc/<pid>/maps with permissions", "[memmap]")
         sawExecutable = sawExecutable || regions[i].execute;
         sawWritable = sawWritable || regions[i].write;
         sawFixture = sawFixture || std::string(regions[i].path).find("hello_elfbug") != std::string::npos;
+        sawBracketed = sawBracketed || regions[i].path[0] == '[';
     }
     REQUIRE(sawExecutable);
     REQUIRE(sawWritable);
     REQUIRE(sawFixture);
+    REQUIRE(sawBracketed); // [stack]/[vdso]/... now carry their pseudo-name verbatim
 
     // Capacity contract: a short buffer still reports the full total and fills only what fits.
     std::vector<ElfBugMemRegion> partial(1);
