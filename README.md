@@ -33,18 +33,18 @@ Qt5 and Qt6 are both supported and auto-detected. Standalone widget demos (`mini
 Each milestone is one debugger feature delivered through the full vertical slice above; progress is tracked as [GitHub milestones](https://github.com/arslan-charyyev/x64dbg/milestones).
 
 - [x] **Foundation** — the cross-platform Qt widget library (`x64dbg::widgets`) is in place: the real Windows widgets compiling on Linux against the Bridge shim, plus standalone demo apps. Individual widgets are ported per feature, as needed.
-- [x] **01) Memory Map** — live `/proc/<pid>/maps` view (regions, permissions, module and `[pseudo]` names).
-- [ ] **02) Breakpoints** — Breakpoints view plus full breakpoint management from the GUI.
-- [ ] **03) Threads** — thread list with active-thread switching (registers, stack and disassembly follow the selection).
-- [ ] **04) Modules & Symbols** — module enumeration and ELF symbol resolution, surfacing labels across the whole UI.
-- [ ] **05) Expression evaluator** — a real `DbgEval` over registers, memory and symbols, replacing the hex-only stub.
-- [ ] **06) Call Stack** — stack unwinding into a Call Stack view.
-- [ ] **07) Command bar & scripting** — a command input bar and scripting.
-- [ ] **08) Session & execution control** — run/step/restart and session-lifecycle parity.
-- [ ] **09) References & xrefs** — reference and cross-reference analysis with their views.
-- [ ] **10) Source, locals & watch (DWARF)** — DWARF-backed source view, locals and watches.
-- [ ] **11) Patches** — in-memory patching and patch management.
-- [ ] **12) Trace** — execution tracing.
+- [x] **[Memory Map](https://github.com/arslan-charyyev/x64dbg/milestone/1)** — live `/proc/<pid>/maps` view (regions, permissions, module and `[pseudo]` names).
+- [ ] **[Breakpoints](https://github.com/arslan-charyyev/x64dbg/milestone/2)** — Breakpoints view plus full breakpoint management from the GUI.
+- [ ] **[Threads](https://github.com/arslan-charyyev/x64dbg/milestone/3)** — thread list with active-thread switching (registers, stack and disassembly follow the selection).
+- [ ] **[Modules & Symbols](https://github.com/arslan-charyyev/x64dbg/milestone/4)** — module enumeration and ELF symbol resolution, surfacing labels across the whole UI.
+- [ ] **[Expression evaluator](https://github.com/arslan-charyyev/x64dbg/milestone/5)** — a real `DbgEval` over registers, memory and symbols, replacing the hex-only stub.
+- [ ] **[Call Stack](https://github.com/arslan-charyyev/x64dbg/milestone/6)** — stack unwinding into a Call Stack view.
+- [ ] **[Command bar & scripting](https://github.com/arslan-charyyev/x64dbg/milestone/7)** — a command input bar and scripting.
+- [ ] **[Session & execution control](https://github.com/arslan-charyyev/x64dbg/milestone/8)** — run/step/restart and session-lifecycle parity.
+- [ ] **[References & xrefs](https://github.com/arslan-charyyev/x64dbg/milestone/9)** — reference and cross-reference analysis with their views.
+- [ ] **[Source, locals & watch (DWARF)](https://github.com/arslan-charyyev/x64dbg/milestone/10)** — DWARF-backed source view, locals and watches.
+- [ ] **[Patches](https://github.com/arslan-charyyev/x64dbg/milestone/11)** — in-memory patching and patch management.
+- [ ] **[Trace](https://github.com/arslan-charyyev/x64dbg/milestone/12)** — execution tracing.
 
 ---
 
