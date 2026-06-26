@@ -645,4 +645,36 @@ extern "C" {
         return dbg->breakpointAddrs.count(addr) > 0;
     }
 
+    size_t ElfBugGetBreakpoints(const ElfBugDebugger* dbg, ElfBugBreakpoint* out, const size_t maxCount)
+    {
+        if(!dbg)
+            return 0;
+
+        // Effective set = applied breakpoints with the pending queue applied on
+        // top, so this agrees with ElfBugIsBreakpointEffective. Lock order matches
+        // processPendingBreakpoints: queue before data.
+        std::set<uint64_t> effective;
+        {
+            std::lock_guard queueLock(dbg->bpQueueMutex);
+            {
+                std::lock_guard dataLock(dbg->bpDataMutex);
+                effective = dbg->breakpointAddrs;
+            }
+            for(const auto & req : dbg->pendingBpRequests)
+            {
+                if(req.setOrDelete)
+                    effective.insert(req.addr);
+                else
+                    effective.erase(req.addr);
+            }
+        }
+
+        const size_t total = effective.size();
+        const size_t n = out ? std::min(total, maxCount) : 0;
+        size_t i = 0;
+        for(auto it = effective.begin(); i < n; ++it, ++i)
+            out[i].address = *it;
+        return total;
+    }
+
 } // extern "C"

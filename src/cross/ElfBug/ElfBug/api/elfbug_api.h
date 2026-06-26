@@ -114,6 +114,17 @@ ELFBUG_EXPORT bool ElfBugDeleteBreakpoint(ElfBugDebugger* dbg, uint64_t addr);
 // True if `addr` has a breakpoint. Pending queue overrides applied set.
 ELFBUG_EXPORT bool ElfBugIsBreakpointEffective(const ElfBugDebugger* dbg, uint64_t addr);
 
+// One breakpoint in the set returned by ElfBugGetBreakpoints.
+typedef struct
+{
+    uint64_t address;
+} ElfBugBreakpoint;
+
+// Copies up to `maxCount` breakpoints into `out` (pass null to query the count)
+// and returns the total number set. Reflects pending set/delete the same way
+// ElfBugIsBreakpointEffective does, and is sorted by address.
+ELFBUG_EXPORT size_t ElfBugGetBreakpoints(const ElfBugDebugger* dbg, ElfBugBreakpoint* out, size_t maxCount);
+
 #ifdef __cplusplus
 }
 #endif
