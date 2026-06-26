@@ -8,6 +8,7 @@
 #include <QFile>
 #include <QStyleFactory>
 #include <QThread>
+#include <QCoreApplication>
 #include <Memory/MemoryPage.h>
 #include "core/LinuxArchitecture.h"
 #include "gui/CPUStack.h"
@@ -92,6 +93,11 @@ void MainWindow::stopDebugThread()
     }
     delete mDebugThread;
     mDebugThread = nullptr;
+
+    // The killed session may have already queued cross-thread signals (notably
+    // processExited, whose handler nulls the memory provider). Drop them so a
+    // stale event can't tear down the session we are about to start.
+    QCoreApplication::removePostedEvents(this, QEvent::MetaCall);
 }
 
 void MainWindow::setupToolBar()
