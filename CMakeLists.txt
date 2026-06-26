@@ -1013,6 +1013,7 @@ add_dependencies(exe
 	gui
 	loaddll
 	deps
+	third_party
 )
 
 set_target_properties(exe PROPERTIES

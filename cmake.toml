@@ -212,7 +212,13 @@ msvc.link-libraries = [
     "Delayimp",
 ]
 # Make the executable build everything
-dependencies = ["dbg", "gui", "loaddll", "deps"]
+dependencies = [
+    "dbg",
+    "gui",
+    "loaddll",
+    "deps",
+    "third_party",
+]
 x86.dependencies = ["launcher"]
 
 [target.exe.properties]

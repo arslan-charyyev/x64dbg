@@ -14,6 +14,16 @@ This is a list of things you can do to help us out (in no particular order). Eac
 - [Translate](https://translate.x64dbg.com) x64dbg (reach out if your language is not listed).
 - Help us improve the [documentation](https://help.x64dbg.com).
 
+### AI Policy
+
+We welcome the use of LLMs for coding, but we hold a high bar for all contributions, and **we expect a human in the loop who genuinely understands the work an LLM produces** on their behalf. For that reason, we **don't accept contributions from autonomous agents**. Pull requests that appear to violate this may be closed, sometimes without notice.
+
+**Don't rely on LLMs to write the whole thing for you when communicating with the maintainers** (meaning replies to comments, PR descriptions, and alike). The readers are humans, and we'd like to hear from you, not from a model (we have models at home). If you're a non-native English speaker using an LLM to thoroughly edit or translate your messages to the maintainers, we'd encourage you to **put the machine translation in a quote block and include the original text in your native language after it**.
+
+If you think it's helpful/necessary to **share context from a chat with an LLM**, please put the **relevant part of it** in a quote block (e.g., using `>`), **disclose it as AI-generated**, and add your own commentary explaining **why it's relevant and what you take from it**.
+
+This policy was adapted from [zed's AI policy](https://github.com/zed-industries/zed/blob/35eaeb94a7e5e9dcd7384df4bd21f01c30a38a09/CONTRIBUTING.md#ai-policy).
+
 ### Compile x64dbg
 
 There is a guide to [compiling the whole project](https://github.com/x64dbg/x64dbg/wiki/Compiling-the-whole-project) available. We recently spent a lot of effort on making this as seamless as possible, but if you have any difficulties, reach out on Discord (`#development` channel)!
