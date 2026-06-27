@@ -875,7 +875,7 @@ void BreakpointsView::pasteConditionalBreakpointSlot()
     //TO DO perform a validation
     QClipboard* clipboard = QApplication::clipboard();
     QString text = clipboard->text();
-    QRegExp regexp(ArchValue("(\\w+) ([\\dA-F]{8}),", "(\\w+) ([\\dA-F]{16}),"), Qt::CaseInsensitive);
+    QRegularExpression regexp(ArchValue("(\\w+) ([\\dA-F]{8}),", "(\\w+) ([\\dA-F]{16}),"), QRegularExpression::CaseInsensitiveOption);
 
     GuiDisableUpdateScope s;
     for(int i : getSelection())
