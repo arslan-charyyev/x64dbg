@@ -111,18 +111,27 @@ ELFBUG_EXPORT bool ElfBugSetRegister(const ElfBugDebugger* dbg, const char* name
 ELFBUG_EXPORT bool ElfBugSetBreakpoint(ElfBugDebugger* dbg, uint64_t addr);
 ELFBUG_EXPORT bool ElfBugDeleteBreakpoint(ElfBugDebugger* dbg, uint64_t addr);
 
-// True if `addr` has a breakpoint. Pending queue overrides applied set.
+// Enable/disable an existing breakpoint without deleting it. A disabled
+// breakpoint restores the original byte (does not trap) yet stays enumerable
+// and can be re-armed. No-op on an address that is not a breakpoint.
+ELFBUG_EXPORT bool ElfBugEnableBreakpoint(ElfBugDebugger* dbg, uint64_t addr);
+ELFBUG_EXPORT bool ElfBugDisableBreakpoint(ElfBugDebugger* dbg, uint64_t addr);
+
+// True if `addr` has an enabled (armed) breakpoint; a disabled breakpoint is
+// not effective. Pending queue overrides applied set.
 ELFBUG_EXPORT bool ElfBugIsBreakpointEffective(const ElfBugDebugger* dbg, uint64_t addr);
 
 // One breakpoint in the set returned by ElfBugGetBreakpoints.
 typedef struct
 {
     uint64_t address;
+    bool enabled;
 } ElfBugBreakpoint;
 
 // Copies up to `maxCount` breakpoints into `out` (pass null to query the count)
-// and returns the total number set. Reflects pending set/delete the same way
-// ElfBugIsBreakpointEffective does, and is sorted by address.
+// and returns the total number set, including disabled ones. Reflects pending
+// set/delete/enable/disable the same way ElfBugIsBreakpointEffective does, and
+// is sorted by address.
 ELFBUG_EXPORT size_t ElfBugGetBreakpoints(const ElfBugDebugger* dbg, ElfBugBreakpoint* out, size_t maxCount);
 
 #ifdef __cplusplus

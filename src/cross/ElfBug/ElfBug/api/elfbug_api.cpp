@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <map>
 #include <mutex>
 #include <set>
 #include <shared_mutex>
@@ -34,13 +35,14 @@ struct ElfBugDebugger : ElfBug::Debugger
     std::unordered_map<std::string, uint64_t> moduleBases;
 
     mutable std::mutex bpDataMutex;
-    std::set<uint64_t> breakpointAddrs;
+    std::map<uint64_t, bool> breakpointStates; // addr -> enabled
 
     mutable std::mutex bpQueueMutex;
+    enum class BpOp { Set, Delete, Enable, Disable };
     struct BpRequest
     {
         uint64_t addr;
-        bool setOrDelete; // true = set, false = delete
+        BpOp op;
     };
     std::vector<BpRequest> pendingBpRequests;
 
@@ -157,24 +159,81 @@ struct ElfBugDebugger : ElfBug::Debugger
                 continue;
 
             const auto addr = static_cast<ElfBug::ptr>(req.addr);
-            if(req.setOrDelete)
+            switch(req.op)
             {
+            case BpOp::Set:
                 if(mProcess->SetBreakpoint(addr))
                 {
                     std::lock_guard lock(bpDataMutex);
-                    breakpointAddrs.insert(req.addr);
+                    breakpointStates[req.addr] = true;
                 }
-            }
-            else
-            {
+                break;
+            case BpOp::Delete:
                 if(mProcess->DeleteBreakpoint(addr))
                 {
                     std::lock_guard lock(bpDataMutex);
-                    breakpointAddrs.erase(req.addr);
+                    breakpointStates.erase(req.addr);
                 }
+                break;
+            case BpOp::Enable:
+                if(mProcess->SetBreakpointEnabled(addr, true))
+                {
+                    std::lock_guard lock(bpDataMutex);
+                    breakpointStates[req.addr] = true;
+                }
+                break;
+            case BpOp::Disable:
+                if(mProcess->SetBreakpointEnabled(addr, false))
+                {
+                    std::lock_guard lock(bpDataMutex);
+                    breakpointStates[req.addr] = false;
+                }
+                break;
             }
         }
         pendingBpRequests.clear();
+    }
+
+    // Applied breakpoints with the pending queue replayed on top, so
+    // ElfBugIsBreakpointEffective and ElfBugGetBreakpoints always agree. Lock
+    // order matches processPendingBreakpoints: queue before data.
+    std::map<uint64_t, bool> effectiveBreakpoints() const
+    {
+        std::lock_guard queueLock(bpQueueMutex);
+        std::map<uint64_t, bool> states;
+        {
+            std::lock_guard dataLock(bpDataMutex);
+            states = breakpointStates;
+        }
+        for(const auto & req : pendingBpRequests)
+        {
+            switch(req.op)
+            {
+            case BpOp::Set:
+                // Set on an existing breakpoint is a no-op in the engine, so it
+                // must not silently re-enable a disabled one.
+                states.emplace(req.addr, true);
+                break;
+            case BpOp::Delete:
+                states.erase(req.addr);
+                break;
+            case BpOp::Enable:
+            {
+                const auto it = states.find(req.addr);
+                if(it != states.end())
+                    it->second = true;
+                break;
+            }
+            case BpOp::Disable:
+            {
+                const auto it = states.find(req.addr);
+                if(it != states.end())
+                    it->second = false;
+                break;
+            }
+            }
+        }
+        return states;
     }
 
     bool memRead(const uint64_t addr, void* dest, const uint64_t size) const
@@ -305,7 +364,7 @@ protected:
         }
         {
             std::lock_guard lock(bpDataMutex);
-            breakpointAddrs.clear();
+            breakpointStates.clear();
         }
         {
             std::lock_guard lock(bpQueueMutex);
@@ -611,7 +670,7 @@ extern "C" {
             return false;
 
         std::lock_guard lock(dbg->bpQueueMutex);
-        dbg->pendingBpRequests.push_back({addr, true});
+        dbg->pendingBpRequests.push_back({addr, ElfBugDebugger::BpOp::Set});
         return true;
     }
 
@@ -623,7 +682,31 @@ extern "C" {
             return false;
 
         std::lock_guard lock(dbg->bpQueueMutex);
-        dbg->pendingBpRequests.push_back({addr, false});
+        dbg->pendingBpRequests.push_back({addr, ElfBugDebugger::BpOp::Delete});
+        return true;
+    }
+
+    bool ElfBugEnableBreakpoint(ElfBugDebugger* dbg, const uint64_t addr)
+    {
+        if(!dbg)
+            return false;
+        if(!dbg->active.load(std::memory_order_acquire))
+            return false;
+
+        std::lock_guard lock(dbg->bpQueueMutex);
+        dbg->pendingBpRequests.push_back({addr, ElfBugDebugger::BpOp::Enable});
+        return true;
+    }
+
+    bool ElfBugDisableBreakpoint(ElfBugDebugger* dbg, const uint64_t addr)
+    {
+        if(!dbg)
+            return false;
+        if(!dbg->active.load(std::memory_order_acquire))
+            return false;
+
+        std::lock_guard lock(dbg->bpQueueMutex);
+        dbg->pendingBpRequests.push_back({addr, ElfBugDebugger::BpOp::Disable});
         return true;
     }
 
@@ -632,17 +715,9 @@ extern "C" {
         if(!dbg)
             return false;
 
-        {
-            std::lock_guard lock(dbg->bpQueueMutex);
-            for(auto it = dbg->pendingBpRequests.rbegin(); it != dbg->pendingBpRequests.rend(); ++it)
-            {
-                if(it->addr == addr)
-                    return it->setOrDelete;
-            }
-        }
-
-        std::lock_guard lock(dbg->bpDataMutex);
-        return dbg->breakpointAddrs.count(addr) > 0;
+        const auto states = dbg->effectiveBreakpoints();
+        const auto it = states.find(addr);
+        return it != states.end() && it->second;
     }
 
     size_t ElfBugGetBreakpoints(const ElfBugDebugger* dbg, ElfBugBreakpoint* out, const size_t maxCount)
@@ -650,30 +725,15 @@ extern "C" {
         if(!dbg)
             return 0;
 
-        // Effective set = applied breakpoints with the pending queue applied on
-        // top, so this agrees with ElfBugIsBreakpointEffective. Lock order matches
-        // processPendingBreakpoints: queue before data.
-        std::set<uint64_t> effective;
-        {
-            std::lock_guard queueLock(dbg->bpQueueMutex);
-            {
-                std::lock_guard dataLock(dbg->bpDataMutex);
-                effective = dbg->breakpointAddrs;
-            }
-            for(const auto & req : dbg->pendingBpRequests)
-            {
-                if(req.setOrDelete)
-                    effective.insert(req.addr);
-                else
-                    effective.erase(req.addr);
-            }
-        }
-
-        const size_t total = effective.size();
+        const auto states = dbg->effectiveBreakpoints();
+        const size_t total = states.size();
         const size_t n = out ? std::min(total, maxCount) : 0;
         size_t i = 0;
-        for(auto it = effective.begin(); i < n; ++it, ++i)
-            out[i].address = *it;
+        for(auto it = states.begin(); i < n; ++it, ++i)
+        {
+            out[i].address = it->first;
+            out[i].enabled = it->second;
+        }
         return total;
     }
 
