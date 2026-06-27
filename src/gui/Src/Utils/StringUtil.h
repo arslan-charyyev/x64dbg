@@ -127,6 +127,7 @@ inline QDate GetCompileDate()
 #define ArchValue(x32value, x64value) x32value
 #endif //_WIN64
 
+#ifdef _WIN32
 // Format : d:hh:mm:ss.1234567
 inline QString FILETIMEToTime(const FILETIME & time)
 {
@@ -142,6 +143,7 @@ inline QString FILETIMEToTime(const FILETIME & time)
 }
 
 QString FILETIMEToDate(const FILETIME & date);
+#endif // _WIN32
 
 bool GetCommentFormat(duint addr, QString & comment, bool* autoComment = nullptr);
 
