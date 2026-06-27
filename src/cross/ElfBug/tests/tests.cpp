@@ -817,3 +817,240 @@ TEST_CASE("Breakpoint list reflects applied breakpoints after a step", "[breakpo
     REQUIRE(ElfBugGetBreakpoints(dbg, nullptr, 0) == 0);
     ElfBugDestroy(dbg);
 }
+
+TEST_CASE("Software breakpoint disable restores byte and enable re-patches", "[breakpoint]")
+{
+    using namespace ElfBug::test;
+    RecordingDebugger dbg;
+    const std::string path = FIXTURE("hello_elfbug");
+    REQUIRE(dbg.Init(path.c_str()));
+
+    struct ToggleRoundTrip
+    {
+        std::optional<ElfBug::ptr> address;
+        std::uint8_t originalByte = 0;
+        std::optional<std::uint8_t> armedByte;
+        std::optional<std::uint8_t> disabledByte;
+        std::optional<std::uint8_t> reEnabledByte;
+        bool setSucceeded = false;
+        bool disableSucceeded = false;
+        bool enableSucceeded = false;
+        bool missingRejected = false;
+        bool deleteSucceeded = false;
+    };
+
+    std::promise<ToggleRoundTrip> bpPromise;
+    auto bpFuture = bpPromise.get_future();
+    dbg.OnSystemBreakpoint([&]
+    {
+        ToggleRoundTrip bp;
+        const auto resolved = ResolveRuntimeAddress(path, dbg.process()->pid, "hit_me");
+        if(resolved)
+        {
+            bp.address = resolved;
+            const auto originalByte = ReadProcessByte(dbg.process(), *resolved);
+            if(originalByte)
+                bp.originalByte = *originalByte;
+            bp.setSucceeded = dbg.process()->SetBreakpoint(*resolved, /*singleshot=*/false, ElfBug::SoftwareType::ShortInt3);
+            bp.armedByte = ReadProcessByte(dbg.process(), *resolved);
+            bp.disableSucceeded = dbg.process()->SetBreakpointEnabled(*resolved, false);
+            bp.disabledByte = ReadProcessByte(dbg.process(), *resolved);
+            bp.enableSucceeded = dbg.process()->SetBreakpointEnabled(*resolved, true);
+            bp.reEnabledByte = ReadProcessByte(dbg.process(), *resolved);
+            // Toggling an address with no breakpoint is rejected.
+            bp.missingRejected = !dbg.process()->SetBreakpointEnabled(*resolved + 0x1000, true);
+            bp.deleteSucceeded = dbg.process()->DeleteBreakpoint(*resolved);
+        }
+        bpPromise.set_value(bp);
+    });
+
+    dbg.StartOnThread();
+    dbg.WaitForSystemBreakpoint();
+    const auto bp = bpFuture.get();
+    REQUIRE(bp.address.has_value());
+    REQUIRE(bp.originalByte != 0xCC);
+    REQUIRE(bp.setSucceeded);
+    REQUIRE(bp.armedByte.has_value());
+    REQUIRE(*bp.armedByte == 0xCC);
+    REQUIRE(bp.disableSucceeded);
+    REQUIRE(bp.disabledByte.has_value());
+    REQUIRE(*bp.disabledByte == bp.originalByte);
+    REQUIRE(bp.enableSucceeded);
+    REQUIRE(bp.reEnabledByte.has_value());
+    REQUIRE(*bp.reEnabledByte == 0xCC);
+    REQUIRE(bp.missingRejected);
+    REQUIRE(bp.deleteSucceeded);
+
+    dbg.Continue();
+    const auto exit_ev = dbg.WaitForExit();
+    dbg.JoinThread();
+
+    REQUIRE(exit_ev.exitCode == 0);
+}
+
+TEST_CASE("Disabled software breakpoint does not trap", "[breakpoint]")
+{
+    using namespace ElfBug::test;
+    RecordingDebugger dbg;
+    const std::string path = FIXTURE("hello_elfbug");
+    REQUIRE(dbg.Init(path.c_str()));
+
+    std::promise<ResolvedBreakpoint> bpPromise;
+    auto bpFuture = bpPromise.get_future();
+    dbg.OnSystemBreakpoint([&]
+    {
+        ResolvedBreakpoint bp;
+        const auto resolved = ResolveRuntimeAddress(path, dbg.process()->pid, "hit_me");
+        if(resolved)
+        {
+            bp.address = resolved;
+            const auto originalByte = ReadProcessByte(dbg.process(), *resolved);
+            if(originalByte)
+                bp.originalByte = *originalByte;
+            dbg.process()->SetBreakpoint(*resolved, /*singleshot=*/false, ElfBug::SoftwareType::ShortInt3);
+            dbg.process()->SetBreakpointEnabled(*resolved, false);
+        }
+        bpPromise.set_value(bp);
+    });
+
+    dbg.StartOnThread();
+    dbg.WaitForSystemBreakpoint();
+    const auto bp = bpFuture.get();
+    REQUIRE(bp.address.has_value());
+    // Disabled: the original instruction byte is back in memory, so execution runs through it.
+    REQUIRE(WaitForProcessByte(dbg.process(), *bp.address, bp.originalByte));
+
+    dbg.Continue();
+    const auto exit_ev = dbg.WaitForExit();
+    dbg.JoinThread();
+
+    REQUIRE(exit_ev.exitCode == 0);
+    REQUIRE(dbg.count(EventType::Breakpoint) == 0);
+}
+
+TEST_CASE("Re-enabled software breakpoint hits again", "[breakpoint]")
+{
+    using namespace ElfBug::test;
+    RecordingDebugger dbg;
+    const std::string path = FIXTURE("hello_elfbug");
+    REQUIRE(dbg.Init(path.c_str()));
+
+    std::promise<ResolvedBreakpoint> bpPromise;
+    auto bpFuture = bpPromise.get_future();
+    dbg.OnSystemBreakpoint([&]
+    {
+        ResolvedBreakpoint bp;
+        const auto resolved = ResolveRuntimeAddress(path, dbg.process()->pid, "hit_me");
+        if(resolved)
+        {
+            bp.address = resolved;
+            dbg.process()->SetBreakpoint(*resolved, /*singleshot=*/false, ElfBug::SoftwareType::ShortInt3);
+            dbg.process()->SetBreakpointEnabled(*resolved, false);
+            dbg.process()->SetBreakpointEnabled(*resolved, true);
+        }
+        bpPromise.set_value(bp);
+    });
+
+    dbg.StartOnThread();
+    dbg.WaitForSystemBreakpoint();
+    const auto bp = bpFuture.get();
+    REQUIRE(bp.address.has_value());
+    // Re-enabled: the int3 is back in memory.
+    REQUIRE(WaitForProcessByte(dbg.process(), *bp.address, 0xCC));
+
+    dbg.Continue();
+    const auto firstHit = dbg.WaitForBreakpointAt(*bp.address);
+    REQUIRE(firstHit.address == *bp.address);
+    REQUIRE(firstHit.instructionPointer == *bp.address);
+
+    dbg.Continue();
+    const auto secondHit = dbg.WaitForBreakpointAt(*bp.address, std::chrono::seconds(5));
+    REQUIRE(secondHit.address == *bp.address);
+
+    dbg.Continue();
+    const auto exit_ev = dbg.WaitForExit();
+    dbg.JoinThread();
+
+    REQUIRE(exit_ev.exitCode == 0);
+    REQUIRE(dbg.count(EventType::Breakpoint) == 2);
+}
+
+TEST_CASE("Breakpoint enumeration reports and toggles enabled state", "[breakpoint]")
+{
+    using namespace ElfBug::test;
+
+    struct BpSync
+    {
+        std::mutex m;
+        std::condition_variable cv;
+        bool systemBreakpoint = false;
+    } sync;
+
+    ElfBugCallbacks cb = {};
+    cb.userdata = &sync;
+    cb.onSystemBreakpoint = [](void* userdata)
+    {
+        auto* s = static_cast<BpSync*>(userdata);
+        {
+            std::lock_guard<std::mutex> lock(s->m);
+            s->systemBreakpoint = true;
+        }
+        s->cv.notify_all();
+    };
+
+    ElfBugDebugger* dbg = ElfBugCreate(&cb);
+    REQUIRE(dbg != nullptr);
+    const std::string path = FIXTURE("hello_elfbug");
+    REQUIRE(ElfBugInit(dbg, path.c_str()));
+
+    std::thread loop([&] { ElfBugStart(dbg); });
+
+    {
+        std::unique_lock<std::mutex> lock(sync.m);
+        REQUIRE(sync.cv.wait_for(lock, std::chrono::seconds(5),
+                                 [&] { return sync.systemBreakpoint; }));
+    }
+
+    const pid_t pid = ElfBugGetPid(dbg);
+    REQUIRE(pid > 0);
+    const auto hit = ResolveRuntimeAddress(path, pid, "hit_me");
+    REQUIRE(hit.has_value());
+
+    // A new breakpoint is enabled.
+    REQUIRE(ElfBugSetBreakpoint(dbg, *hit));
+    {
+        ElfBugBreakpoint bps[4] = {};
+        REQUIRE(ElfBugGetBreakpoints(dbg, bps, 4) == 1);
+        REQUIRE(bps[0].address == *hit);
+        REQUIRE(bps[0].enabled);
+    }
+    REQUIRE(ElfBugIsBreakpointEffective(dbg, *hit));
+
+    // Disabling keeps it enumerable but marks it not effective.
+    REQUIRE(ElfBugDisableBreakpoint(dbg, *hit));
+    {
+        ElfBugBreakpoint bps[4] = {};
+        REQUIRE(ElfBugGetBreakpoints(dbg, bps, 4) == 1);
+        REQUIRE(bps[0].address == *hit);
+        REQUIRE_FALSE(bps[0].enabled);
+    }
+    REQUIRE_FALSE(ElfBugIsBreakpointEffective(dbg, *hit));
+
+    // Re-enabling re-arms it.
+    REQUIRE(ElfBugEnableBreakpoint(dbg, *hit));
+    {
+        ElfBugBreakpoint bps[4] = {};
+        REQUIRE(ElfBugGetBreakpoints(dbg, bps, 4) == 1);
+        REQUIRE(bps[0].enabled);
+    }
+    REQUIRE(ElfBugIsBreakpointEffective(dbg, *hit));
+
+    // Clear so the inferior runs free to exit.
+    REQUIRE(ElfBugDeleteBreakpoint(dbg, *hit));
+    REQUIRE(ElfBugGetBreakpoints(dbg, nullptr, 0) == 0);
+
+    ElfBugContinue(dbg);
+    loop.join();
+
+    ElfBugDestroy(dbg);
+}
