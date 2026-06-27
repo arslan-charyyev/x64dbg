@@ -1,5 +1,7 @@
 
+#include <algorithm>
 #include <atomic>
+#include <vector>
 #include <QGuiApplication>
 #include <QClipboard>
 #include <QThread>
@@ -82,6 +84,31 @@ void BridgeFree(void* ptr)
 bool DbgIsDebugging()
 {
     return gMemory.load() != &gInvalidMemoryProvider;
+}
+
+// The enumeration hook only feeds BpRefList. Per-breakpoint state (existence,
+// enabled, active) is resolved live through the query hook (DbgGetBpxTypeAt)
+// instead, so a ref built directly via BpRefVa stays correct without a prior
+// BpRefList, and querying many addresses (e.g. a sidebar paint) stays cheap.
+static std::atomic<BreakpointListFunc> gBreakpointList{nullptr};
+// Backs the pointer BpRefList hands out. Widget data access is single-threaded (the
+// Qt GUI thread, never the debug loop), so one buffer reused per call suffices; it
+// stays valid until the next BpRefList call, which is how the populate loop reads it.
+static std::vector<BP_REF> gBpRefs;
+
+void DbgSetBreakpointList(BreakpointListFunc func)
+{
+    gBreakpointList.store(func);
+}
+
+static bool bpRefExists(const BP_REF* ref)
+{
+    // DLL/exception refs carry no probeable address and don't exist in ElfBug
+    // (BpRefVa rejects the same three types); address-based refs are confirmed
+    // live through the query hook.
+    if(!ref || ref->type == bp_none || ref->type == bp_dll || ref->type == bp_exception)
+        return false;
+    return DbgGetBpxTypeAt(ref->module + ref->offset) == ref->type;
 }
 
 DBGFUNCTIONS* DbgFunctions()
@@ -167,7 +194,7 @@ DBGFUNCTIONS* DbgFunctions()
         {
             return 0;
         };
-        // Breakpoint access. Stubbed until the adapter + shim ticket wires them to ElfBug.
+        // Exception/memory breakpoints don't exist in ElfBug, so these stay stubbed.
         f.EnumExceptions = [](ListInfo * constants) {};
         f.MemBpSize = [](duint addr) -> duint
         {
@@ -175,22 +202,78 @@ DBGFUNCTIONS* DbgFunctions()
         };
         f.BpRefList = [](duint* count) -> BP_REF*
         {
-            *count = 0;
-            return nullptr;
+            auto list = gBreakpointList.load();
+            if(!list)
+            {
+                *count = 0;
+                return nullptr;
+            }
+            std::vector<BridgeBreakpoint> bps(list(nullptr, 0));
+            size_t n = std::min(list(bps.data(), bps.size()), bps.size());
+            gBpRefs.clear();
+            gBpRefs.reserve(n);
+            for(size_t i = 0; i < n; i++)
+                gBpRefs.push_back({bps[i].type, 0, bps[i].addr});
+            *count = (duint)gBpRefs.size();
+            return gBpRefs.data();
         };
         f.BpRefVa = [](BP_REF * ref, BPXTYPE type, duint va)
         {
-            return false;
+            if(type == bp_none || type == bp_dll || type == bp_exception)
+            {
+                *ref = { bp_none };
+                return false;
+            }
+            // No module database: store the absolute address as the offset (module 0).
+            *ref = { type, 0, va };
+            return true;
         };
         f.BpRefRva = [](BP_REF * ref, BPXTYPE type, const char* module, duint rva)
         {
+            // Module-relative refs need a module base the shim cannot resolve.
+            *ref = { bp_none };
             return false;
         };
-        f.BpRefDll = [](BP_REF * ref, const char* module) {};
-        f.BpRefException = [](BP_REF * ref, unsigned int code) {};
+        f.BpRefDll = [](BP_REF * ref, const char* module)
+        {
+            *ref = { bp_dll };
+        };
+        f.BpRefException = [](BP_REF * ref, unsigned int code)
+        {
+            *ref = { bp_exception, 0, code };
+        };
         f.BpGetFieldNumber = [](const BP_REF * ref, BP_FIELD field, duint * value)
         {
-            return false;
+            if(!bpRefExists(ref))
+                return false;
+            switch(field)
+            {
+            case bpf_type:
+                *value = ref->type;
+                return true;
+            case bpf_offset:
+                *value = ref->offset;
+                return true;
+            case bpf_address:
+                *value = ref->module + ref->offset;
+                return true;
+            case bpf_enabled:
+            case bpf_active:
+                *value = 1;
+                return true;
+            case bpf_singleshoot:
+            case bpf_silent:
+            case bpf_typeex:
+            case bpf_hwsize:
+            case bpf_hwslot:
+            case bpf_oldbytes:
+            case bpf_fastresume:
+            case bpf_hitcount:
+                *value = 0;
+                return true;
+            default:
+                return false;
+            }
         };
         f.BpSetFieldNumber = [](const BP_REF * ref, BP_FIELD field, duint value)
         {
@@ -198,7 +281,29 @@ DBGFUNCTIONS* DbgFunctions()
         };
         f.BpGetFieldText = [](const BP_REF * ref, BP_FIELD field, CBSTRING callback, void* userdata)
         {
-            return false;
+            if(!bpRefExists(ref))
+                return false;
+            switch(field)
+            {
+            case bpf_module:
+            {
+                char mod[MAX_MODULE_SIZE] = "";
+                gMemory.load()->modNameFromAddr(ref->module + ref->offset, mod, sizeof(mod), false);
+                callback(mod, userdata);
+                return true;
+            }
+            case bpf_name:
+            case bpf_breakcondition:
+            case bpf_logtext:
+            case bpf_logcondition:
+            case bpf_commandtext:
+            case bpf_commandcondition:
+            case bpf_logfile:
+                callback("", userdata);
+                return true;
+            default:
+                return false;
+            }
         };
         f.BpSetFieldText = [](const BP_REF * ref, BP_FIELD field, const char* value)
         {

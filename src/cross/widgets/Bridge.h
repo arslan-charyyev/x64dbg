@@ -208,6 +208,19 @@ void DbgSetMemoryProvider(MemoryProvider* provider);
 using BreakpointQueryFunc = BPXTYPE(*)(duint addr);
 void DbgSetBreakpointQuery(BreakpointQueryFunc func);
 
+// A breakpoint surfaced by the enumeration hook below. Free of ElfBug types so these
+// headers still compile on Windows; the Linux adapter fills it from the engine.
+struct BridgeBreakpoint
+{
+    duint addr;
+    BPXTYPE type;
+};
+
+// Lists the engine's breakpoints (pass out=null to query the count), mirroring the
+// memory map's two-call shape. BpRefList turns the result into BP_REF handles.
+using BreakpointListFunc = size_t (*)(BridgeBreakpoint* out, size_t maxCount);
+void DbgSetBreakpointList(BreakpointListFunc func);
+
 bool DbgIsDebugging();
 DBGFUNCTIONS* DbgFunctions();
 
