@@ -617,6 +617,7 @@ void GuiAddStatusBarMessage(const char* msg)
 
 void GuiUpdateBreakpointsView()
 {
+    emit Bridge::getBridge()->updateBreakpoints();
 }
 
 bool GuiIsUpdateDisabled()
