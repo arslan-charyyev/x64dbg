@@ -95,10 +95,12 @@ DbgAdapter::DbgAdapter(QObject* parent)
     sInstance.store(this);
     DbgSetBreakpointQuery(&DbgAdapter::queryBreakpoint);
     DbgSetBreakpointList(&DbgAdapter::listBreakpoints);
+    DbgSetBreakpointMutate(&DbgAdapter::mutateBreakpoint);
 }
 
 DbgAdapter::~DbgAdapter()
 {
+    DbgSetBreakpointMutate(nullptr);
     DbgSetBreakpointList(nullptr);
     DbgSetBreakpointQuery(nullptr);
     sInstance.store(nullptr);
@@ -285,6 +287,21 @@ size_t DbgAdapter::listBreakpoints(BridgeBreakpoint* out, size_t maxCount)
         out[i].type = bp_normal;
     }
     return count;
+}
+
+bool DbgAdapter::mutateBreakpoint(BpMutation op, duint addr)
+{
+    auto* instance = sInstance.load();
+    if(!instance || !instance->isActive())
+        return false;
+    switch(op)
+    {
+    case BpMutation::Set:
+        return ElfBugSetBreakpoint(instance->mDebugger, addr);
+    case BpMutation::Delete:
+        return ElfBugDeleteBreakpoint(instance->mDebugger, addr);
+    }
+    return false;
 }
 
 void DbgAdapter::emitStoppedState(const QString & reason)
