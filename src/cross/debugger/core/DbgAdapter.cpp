@@ -94,10 +94,12 @@ DbgAdapter::DbgAdapter(QObject* parent)
     assert(!sInstance.load() && "Only one DbgAdapter instance is allowed");
     sInstance.store(this);
     DbgSetBreakpointQuery(&DbgAdapter::queryBreakpoint);
+    DbgSetBreakpointList(&DbgAdapter::listBreakpoints);
 }
 
 DbgAdapter::~DbgAdapter()
 {
+    DbgSetBreakpointList(nullptr);
     DbgSetBreakpointQuery(nullptr);
     sInstance.store(nullptr);
     if(mDebugger)
@@ -262,6 +264,27 @@ BPXTYPE DbgAdapter::queryBreakpoint(duint addr)
     if(!instance)
         return bp_none;
     return instance->hasBreakpoint(addr) ? bp_normal : bp_none;
+}
+
+size_t DbgAdapter::listBreakpoints(BridgeBreakpoint* out, size_t maxCount)
+{
+    auto* instance = sInstance.load();
+    if(!instance || !instance->mDebugger)
+        return 0;
+    if(!out || maxCount == 0)
+        return ElfBugGetBreakpoints(instance->mDebugger, nullptr, 0);
+
+    std::vector<ElfBugBreakpoint> bps(maxCount);
+    // ElfBugGetBreakpoints returns the total count, which can exceed maxCount if the
+    // set grew since the sizing query; only maxCount entries were written.
+    const size_t count = std::min(ElfBugGetBreakpoints(instance->mDebugger, bps.data(), maxCount), maxCount);
+    for(size_t i = 0; i < count; ++i)
+    {
+        // ElfBug only sets software execution breakpoints.
+        out[i].addr = bps[i].address;
+        out[i].type = bp_normal;
+    }
+    return count;
 }
 
 void DbgAdapter::emitStoppedState(const QString & reason)

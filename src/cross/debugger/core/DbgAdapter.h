@@ -49,6 +49,7 @@ signals:
 
 private:
     static BPXTYPE queryBreakpoint(duint addr);
+    static size_t listBreakpoints(BridgeBreakpoint* out, size_t maxCount);
     static std::atomic<DbgAdapter*> sInstance;
 
     static void onCreateProcess(pid_t pid, uint64_t entryPoint, void* userdata);
