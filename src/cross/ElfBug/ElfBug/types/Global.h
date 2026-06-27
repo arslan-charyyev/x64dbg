@@ -42,6 +42,7 @@ namespace ElfBug
     {
         ptr address = 0;
         bool singleshot = false;
+        bool enabled = true;
         BreakpointType type = BreakpointType::Software;
         BreakpointInternalInfo internal = {};
     };

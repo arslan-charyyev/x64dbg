@@ -69,6 +69,32 @@ namespace ElfBug
         return true;
     }
 
+    bool Process::SetBreakpointEnabled(const ptr address, const bool enabled)
+    {
+        const BreakpointKey key{BreakpointType::Software, address};
+        const auto it = breakpoints.find(key);
+        if(it == breakpoints.end())
+            return false;
+
+        auto & info = it->second;
+        if(info.enabled == enabled)
+            return true;
+
+        errno = 0;
+        const long word = ptrace(PTRACE_PEEKDATA, pid, reinterpret_cast<void*>(address), nullptr);
+        if(word == -1 && errno != 0)
+            return false;
+
+        const uint8_t byte = enabled ? info.internal.software.newbytes[0]
+                             : info.internal.software.oldbytes[0];
+        const long patchedWord = (word & ~0xFFL) | byte;
+        if(ptrace(PTRACE_POKEDATA, pid, reinterpret_cast<void*>(address), reinterpret_cast<void*>(patchedWord)) == -1)
+            return false;
+
+        info.enabled = enabled;
+        return true;
+    }
+
     bool Process::SetMemoryBreakpoint(const ptr address, const ptr size, const MemoryType type, bool singleshot)
     {
         (void)address;

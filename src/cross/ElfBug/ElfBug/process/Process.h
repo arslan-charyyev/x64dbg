@@ -40,6 +40,10 @@ namespace ElfBug
         bool SetBreakpoint(ptr address, const BreakpointCallback & cbBreakpoint, bool singleshot = false, SoftwareType type = SoftwareType::ShortInt3);
         bool DeleteBreakpoint(ptr address);
 
+        // Arms (enabled) or restores the original byte (disabled) of an existing
+        // software breakpoint without forgetting it. Idempotent; false if absent.
+        bool SetBreakpointEnabled(ptr address, bool enabled);
+
         // TODO: implement via mprotect + SIGSEGV handling
         bool SetMemoryBreakpoint(ptr address, ptr size, MemoryType type = MemoryType::Access, bool singleshot = true);
         bool SetMemoryBreakpoint(ptr address, ptr size, const BreakpointCallback & cbBreakpoint, MemoryType type = MemoryType::Access, bool singleshot = true);
