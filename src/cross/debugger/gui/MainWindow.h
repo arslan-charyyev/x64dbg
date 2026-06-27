@@ -11,6 +11,7 @@
 class QThread;
 class CPUStack;
 class MemoryMapView;
+class BreakpointsView;
 
 class MainWindow : public QMainWindow
 {
@@ -48,5 +49,6 @@ private:
     CPUStack* mStack = nullptr;
     RegistersView* mRegisters = nullptr;
     MemoryMapView* mMemoryMap = nullptr;
+    BreakpointsView* mBreakpoints = nullptr;
     QTextBrowser* mLog = nullptr;
 };

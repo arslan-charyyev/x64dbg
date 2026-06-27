@@ -13,6 +13,7 @@
 #include "core/LinuxArchitecture.h"
 #include "gui/CPUStack.h"
 #include "Gui/MemoryMapView.h"
+#include "Gui/BreakpointsView.h"
 
 static LinuxArchitecture gArch;
 
@@ -158,7 +159,8 @@ void MainWindow::setupTabs()
         return label;
     };
 
-    mTabWidget->addTab(makePlaceholder(tr("Breakpoints view - not yet implemented")), icon("breakpoint"), tr("Breakpoints"));
+    mBreakpoints = new BreakpointsView();
+    mTabWidget->addTab(mBreakpoints, icon("breakpoint"), tr("Breakpoints"));
     mMemoryMap = new MemoryMapView();
     mTabWidget->addTab(mMemoryMap, icon("memory-map"), tr("Memory Map"));
     mTabWidget->addTab(makePlaceholder(tr("Call stack view - not yet implemented")), icon("callstack"), tr("Call Stack"));
@@ -277,6 +279,7 @@ void MainWindow::onProcessCreated(const duint entryPoint) const
 {
     onLogMessage(QString("[x64dbg] Process attached, entry: 0x%1").arg(entryPoint, 0, 16));
     mHexDump->printDumpAt(entryPoint);
+    GuiUpdateBreakpointsView();
 }
 
 void MainWindow::onProcessExited(const int exitCode) const
@@ -323,6 +326,7 @@ void MainWindow::onToggleBreakpoint() const
     if(!mProvider->toggleBreakpoint(addr))
         onLogMessage(QString("[x64dbg] Failed to toggle breakpoint at 0x%1").arg(addr, 0, 16));
     mDisassembly->reloadData();
+    GuiUpdateBreakpointsView();
 }
 
 void MainWindow::onStopped(const duint rip, const QString & reason) const
@@ -330,6 +334,7 @@ void MainWindow::onStopped(const duint rip, const QString & reason) const
     mDisassembly->gotoAddress(rip);
     mDisassembly->reloadData();
     mMemoryMap->refreshMapSlot();
+    GuiUpdateBreakpointsView();
     statusBar()->showMessage(QString("%1 - 0x%2").arg(reason).arg(rip, 0, 16));
     mTabWidget->setCurrentIndex(0);
 }
