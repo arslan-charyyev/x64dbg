@@ -15,6 +15,7 @@ include(Qt.cmake)
 set(hook_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Bridge.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Bridge.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/bridgelist.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Configuration.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Configuration.h
     ${CMAKE_CURRENT_SOURCE_DIR}/MagicMenu.h
@@ -94,6 +95,11 @@ set(widgets_SOURCES
     ${widgets_SOURCE_DIR}/Gui/CodepageSelectionDialog.cpp
     ${widgets_SOURCE_DIR}/Gui/CodepageSelectionDialog.h
     ${widgets_SOURCE_DIR}/Gui/CodepageSelectionDialog.ui
+    ${widgets_SOURCE_DIR}/Gui/BreakpointsView.cpp
+    ${widgets_SOURCE_DIR}/Gui/BreakpointsView.h
+    ${widgets_SOURCE_DIR}/Gui/EditBreakpointDialog.cpp
+    ${widgets_SOURCE_DIR}/Gui/EditBreakpointDialog.h
+    ${widgets_SOURCE_DIR}/Gui/EditBreakpointDialog.ui
     ${widgets_SOURCE_DIR}/Memory/MemoryPage.cpp
     ${widgets_SOURCE_DIR}/Memory/MemoryPage.h
     ${widgets_SOURCE_DIR}/Utils/ActionHelpers.h
@@ -114,6 +120,8 @@ set(widgets_SOURCES
     ${widgets_SOURCE_DIR}/Utils/VaHistory.h
     ${widgets_SOURCE_DIR}/Utils/SymbolAutoCompleteModel.cpp
     ${widgets_SOURCE_DIR}/Utils/SymbolAutoCompleteModel.h
+    ${widgets_SOURCE_DIR}/Utils/Breakpoints.cpp
+    ${widgets_SOURCE_DIR}/Utils/Breakpoints.h
     ${widgets_SOURCE_DIR}/Gui/RegistersView.cpp
     ${widgets_SOURCE_DIR}/Gui/RegistersView.h
     ${widgets_SOURCE_DIR}/Accessible/AccessibleRegistersView.cpp
@@ -130,6 +138,19 @@ set(widgets_SOURCES
 
 include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR})
 
+# These two canonical sources live in src/gui/Src/Utils, so their #include "StringUtil.h" /
+# "MiscUtil.h" resolve to the canonical Utils headers sitting beside them: for a quoted include the
+# compiler searches the including file's own directory first, which outranks even the BEFORE -I
+# above that points every other TU at the cross shim headers. Those canonical headers redeclare the
+# same free functions as the cross shim's StringUtil.h/MiscUtil.h. Compiled alone that is fine, but
+# a unity batch merges these files with shim-using TUs, landing both copies in one TU and causing
+# duplicate-declaration errors. Keep them out of unity so each sees only one header.
+set_source_files_properties(
+    ${widgets_SOURCE_DIR}/Utils/Breakpoints.cpp
+    ${widgets_SOURCE_DIR}/Utils/SymbolAutoCompleteModel.cpp
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
+)
+
 add_library(x64dbg_widgets STATIC
     ${hook_SOURCES}
     ${widgets_SOURCES}
@@ -141,6 +162,7 @@ target_include_directories(x64dbg_widgets PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${widgets_SOURCE_DIR}
     ${widgets_SOURCE_DIR}/BasicView
+    ${widgets_SOURCE_DIR}/Disassembler
     ${widgets_SOURCE_DIR}/Gui
     ${widgets_SOURCE_DIR}/Utils
     ${widgets_SOURCE_DIR}/QHexEdit
