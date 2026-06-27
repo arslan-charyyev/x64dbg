@@ -221,6 +221,12 @@ struct BridgeBreakpoint
 using BreakpointListFunc = size_t (*)(BridgeBreakpoint* out, size_t maxCount);
 void DbgSetBreakpointList(BreakpointListFunc func);
 
+// Mutates an engine breakpoint by address. The command dispatcher calls this for
+// bp/bc; the Linux adapter routes it to ElfBug set/delete. Returns true on success.
+enum class BpMutation { Set, Delete };
+using BreakpointMutateFunc = bool (*)(BpMutation op, duint addr);
+void DbgSetBreakpointMutate(BreakpointMutateFunc func);
+
 bool DbgIsDebugging();
 DBGFUNCTIONS* DbgFunctions();
 
@@ -319,6 +325,7 @@ void GuiUpdateAllViews();
 void GuiUpdatePatches();
 void GuiUpdateMemoryView();
 void GuiUpdateBreakpointsView();
+void GuiUpdateDisassemblyView();
 bool GuiIsUpdateDisabled();
 void GuiUpdateEnable(bool updateNow);
 void GuiUpdateDisable();

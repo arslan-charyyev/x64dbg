@@ -397,9 +397,36 @@ duint DbgValFromString(const char* expr)
     return DbgEval(expr, nullptr);
 }
 
-// Minimal dispatch for the view-follow commands the widgets emit ("disasm <expr>"
-// / "dump <expr>"); mirrors how Windows' GuiDisasmAt/GuiDumpAt drive the views via
-// Bridge signals. Unrecognized commands stay no-ops until the shim grows real ones.
+static std::atomic<BreakpointMutateFunc> gBreakpointMutate{nullptr};
+
+void DbgSetBreakpointMutate(BreakpointMutateFunc func)
+{
+    gBreakpointMutate.store(func);
+}
+
+static bool mutateBreakpoint(BpMutation op, duint addr)
+{
+    auto mutate = gBreakpointMutate.load();
+    return mutate ? mutate(op, addr) : false;
+}
+
+// Breakpoint command operands arrive quoted, and when the module is unknown the view
+// encodes the absolute address as "module":$<hex> (getBpIdentifier). Take the value
+// after the last '$' when present, strip quotes, then evaluate the remainder.
+static duint evalBpOperand(const QString & operand, bool* success)
+{
+    QString expr = operand;
+    const int dollar = expr.lastIndexOf('$');
+    if(dollar >= 0)
+        expr = expr.mid(dollar + 1);
+    expr.remove('"');
+    return DbgEval(expr.trimmed().toUtf8().constData(), success);
+}
+
+// Minimal dispatch for the commands the widgets emit: the view-follow pair
+// ("disasm <expr>" / "dump <expr>", mirroring Windows' GuiDisasmAt/GuiDumpAt) and
+// breakpoint set/delete ("bp <addr>" / "bc <ident>"). Unrecognized commands stay
+// no-ops until the shim grows real ones.
 static bool execCommand(const char* cmd)
 {
     if(!cmd)
@@ -410,8 +437,9 @@ static bool execCommand(const char* cmd)
     if(sep > 0)
     {
         const QString command = text.left(sep);
+        const QString operand = text.mid(sep + 1).trimmed();
         bool ok = false;
-        const duint addr = DbgEval(text.mid(sep + 1).trimmed().toUtf8().constData(), &ok);
+        const duint addr = DbgEval(operand.toUtf8().constData(), &ok);
         if(ok)
         {
             if(command == "disasm" || command == "disassemble")
@@ -424,6 +452,18 @@ static bool execCommand(const char* cmd)
                 emit Bridge::getBridge()->dumpAt(addr);
                 return true;
             }
+        }
+        if(command == "bp" || command == "bc")
+        {
+            bool bpok = false;
+            const duint bpaddr = evalBpOperand(operand, &bpok);
+            if(bpok && mutateBreakpoint(command == "bp" ? BpMutation::Set : BpMutation::Delete, bpaddr))
+            {
+                GuiUpdateBreakpointsView();
+                GuiUpdateDisassemblyView();
+                return true;
+            }
+            return false;
         }
     }
 
@@ -618,6 +658,11 @@ void GuiAddStatusBarMessage(const char* msg)
 void GuiUpdateBreakpointsView()
 {
     emit Bridge::getBridge()->updateBreakpoints();
+}
+
+void GuiUpdateDisassemblyView()
+{
+    emit Bridge::getBridge()->updateDisassembly();
 }
 
 bool GuiIsUpdateDisabled()
