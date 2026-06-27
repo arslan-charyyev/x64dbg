@@ -7,6 +7,7 @@
 
 #include "Bridge.h"
 #include "Types.h"
+#include <Disassembler/Architecture.h>
 #include <zydis_wrapper.h>
 
 struct InvalidMemoryProvider : MemoryProvider
@@ -165,6 +166,43 @@ DBGFUNCTIONS* DbgFunctions()
         f.SymAutoComplete = [](const char* Search, char** Buffer, int MaxSymbols)
         {
             return 0;
+        };
+        // Breakpoint access. Stubbed until the adapter + shim ticket wires them to ElfBug.
+        f.EnumExceptions = [](ListInfo * constants) {};
+        f.MemBpSize = [](duint addr) -> duint
+        {
+            return 0;
+        };
+        f.BpRefList = [](duint* count) -> BP_REF*
+        {
+            *count = 0;
+            return nullptr;
+        };
+        f.BpRefVa = [](BP_REF * ref, BPXTYPE type, duint va)
+        {
+            return false;
+        };
+        f.BpRefRva = [](BP_REF * ref, BPXTYPE type, const char* module, duint rva)
+        {
+            return false;
+        };
+        f.BpRefDll = [](BP_REF * ref, const char* module) {};
+        f.BpRefException = [](BP_REF * ref, unsigned int code) {};
+        f.BpGetFieldNumber = [](const BP_REF * ref, BP_FIELD field, duint * value)
+        {
+            return false;
+        };
+        f.BpSetFieldNumber = [](const BP_REF * ref, BP_FIELD field, duint value)
+        {
+            return false;
+        };
+        f.BpGetFieldText = [](const BP_REF * ref, BP_FIELD field, CBSTRING callback, void* userdata)
+        {
+            return false;
+        };
+        f.BpSetFieldText = [](const BP_REF * ref, BP_FIELD field, const char* value)
+        {
+            return false;
         };
         return f;
     }();
@@ -425,6 +463,16 @@ void DbgSettingsUpdated()
 {
 }
 
+duint DbgModBaseFromName(const char* name)
+{
+    return 0;
+}
+
+bool DbgIsValidExpression(const char* expression)
+{
+    return false;
+}
+
 // GUI
 
 void GuiExecuteOnGuiThreadEx(GuiCallback callback, void* data)
@@ -458,10 +506,48 @@ void GuiUpdateMemoryView()
 {
 }
 
+void GuiAddStatusBarMessage(const char* msg)
+{
+}
+
+void GuiUpdateBreakpointsView()
+{
+}
+
+bool GuiIsUpdateDisabled()
+{
+    return false;
+}
+
+void GuiUpdateEnable(bool updateNow)
+{
+}
+
+void GuiUpdateDisable()
+{
+}
+
 Bridge* Bridge::getBridge()
 {
     static Bridge i;
     return &i;
+}
+
+Architecture* Bridge::getArchitecture()
+{
+    struct DefaultArchitecture : Architecture
+    {
+        bool disasm64() const override
+        {
+            return sizeof(void*) == 8;
+        }
+        bool addr64() const override
+        {
+            return sizeof(void*) == 8;
+        }
+    };
+    static DefaultArchitecture arch;
+    return &arch;
 }
 
 void Bridge::CopyToClipboard(const QString & str)

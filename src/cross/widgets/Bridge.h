@@ -17,8 +17,9 @@ const wchar_t* BridgeUserDirectory();
 void* BridgeAlloc(size_t size);
 void BridgeFree(void* ptr);
 
+#include "bridgelist.h"
+
 #define MAX_LABEL_SIZE 256
-#define MAX_MODULE_SIZE 256
 #define MAX_COMMENT_SIZE 256
 #define MAX_STRING_SIZE 2048
 #define RIGHTS_STRING_SIZE (sizeof("ERWCG"))
@@ -101,14 +102,6 @@ enum SEGTYPE
     SEG_SS,
 };
 
-enum BPXTYPE
-{
-    bp_none,
-    bp_normal,
-    bp_hardware,
-    bp_memory,
-};
-
 typedef enum
 {
     FUNC_NONE,
@@ -182,6 +175,17 @@ struct DBGFUNCTIONS
     bool (*GetUserComment)(duint addr, char* comment);
     duint(*FileOffsetToVa)(const char* modname, duint offset);
     int (*SymAutoComplete)(const char* Search, char** Buffer, int MaxSymbols);
+    void (*EnumExceptions)(ListOf(CONSTANTINFO) constants);
+    duint(*MemBpSize)(duint addr);
+    BP_REF* (*BpRefList)(duint* count);
+    bool (*BpRefVa)(BP_REF* ref, BPXTYPE type, duint va);
+    bool (*BpRefRva)(BP_REF* ref, BPXTYPE type, const char* module, duint rva);
+    void (*BpRefDll)(BP_REF* ref, const char* module);
+    void (*BpRefException)(BP_REF* ref, unsigned int code);
+    bool (*BpGetFieldNumber)(const BP_REF* ref, BP_FIELD field, duint* value);
+    bool (*BpSetFieldNumber)(const BP_REF* ref, BP_FIELD field, duint value);
+    bool (*BpGetFieldText)(const BP_REF* ref, BP_FIELD field, CBSTRING callback, void* userdata);
+    bool (*BpSetFieldText)(const BP_REF* ref, BP_FIELD field, const char* value);
 };
 
 struct MemoryProvider
@@ -206,6 +210,39 @@ void DbgSetBreakpointQuery(BreakpointQueryFunc func);
 
 bool DbgIsDebugging();
 DBGFUNCTIONS* DbgFunctions();
+
+inline bool BP_REF::GetField(BP_FIELD field, duint & value)
+{
+    return DbgFunctions()->BpGetFieldNumber(this, field, &value);
+}
+
+inline bool BP_REF::GetField(BP_FIELD field, bool & value)
+{
+    duint n = 0;
+    if(!DbgFunctions()->BpGetFieldNumber(this, field, &n))
+        return false;
+    value = !!n;
+    return true;
+}
+
+inline bool BP_REF::SetField(BP_FIELD field, duint value)
+{
+    return DbgFunctions()->BpSetFieldNumber(this, field, value);
+}
+
+inline bool BP_REF::GetField(BP_FIELD field, std::string & value)
+{
+    return DbgFunctions()->BpGetFieldText(this, field, [](const char* str, void* userdata)
+    {
+        *(std::string*)userdata = str;
+    }, &value);
+}
+
+inline bool BP_REF::SetField(BP_FIELD field, const std::string & value)
+{
+    return DbgFunctions()->BpSetFieldText(this, field, value.c_str());
+}
+
 bool DbgGetLabelAt(duint addr, SEGTYPE seg, char* label);
 bool DbgGetModuleAt(duint addr, char* module);
 bool DbgGetCommentAt(duint addr, char* comment);
@@ -235,6 +272,8 @@ bool DbgMemMap(MEMMAP* memmap);
 void DbgMenuPrepare(GUIMENUTYPE hMenu);
 bool DbgSetCommentAt(duint addr, const char* text);
 void DbgSettingsUpdated();
+duint DbgModBaseFromName(const char* name);
+bool DbgIsValidExpression(const char* expression);
 
 struct TYPEDESCRIPTOR;
 
@@ -262,9 +301,37 @@ using GuiCallback = void(*)(void*);
 
 void GuiExecuteOnGuiThreadEx(GuiCallback callback, void* data);
 void GuiAddLogMessage(const char* msg);
+void GuiAddStatusBarMessage(const char* msg);
 void GuiUpdateAllViews();
 void GuiUpdatePatches();
 void GuiUpdateMemoryView();
+void GuiUpdateBreakpointsView();
+bool GuiIsUpdateDisabled();
+void GuiUpdateEnable(bool updateNow);
+void GuiUpdateDisable();
+
+class GuiDisableUpdateScope
+{
+    bool updateAfter;
+    bool wasEnabled;
+
+public:
+    GuiDisableUpdateScope(const GuiDisableUpdateScope &) = delete;
+
+    explicit GuiDisableUpdateScope(bool updateAfter = true)
+        : updateAfter(updateAfter)
+    {
+        wasEnabled = !GuiIsUpdateDisabled();
+        if(wasEnabled)
+            GuiUpdateDisable();
+    }
+
+    ~GuiDisableUpdateScope()
+    {
+        if(wasEnabled)
+            GuiUpdateEnable(updateAfter);
+    }
+};
 
 // QString helpers
 bool DbgCmdExec(const QString & cmd);
@@ -272,6 +339,7 @@ bool DbgCmdExecDirect(const QString & cmd);
 
 class QWidget;
 class QMenu;
+class Architecture;
 
 // Mirrors the Windows Bridge's synchronous GUI-request result types. The cross
 // shim keeps the full enum for parity; only a few are wired so far.
@@ -323,6 +391,7 @@ signals:
     void repaintTableView();
     void updateDump();
     void updateDisassembly();
+    void updateBreakpoints();
     void dbgStateChanged(DBGSTATE state);
     void updateMemory();
     void disassembleAt(duint va, duint cip);
@@ -339,6 +408,7 @@ signals:
 
 public:
     static Bridge* getBridge();
+    static Architecture* getArchitecture();
     static void CopyToClipboard(const QString & str);
 
     void addMsgToLog(const QByteArray & bytes);
